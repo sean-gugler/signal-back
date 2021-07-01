@@ -116,19 +116,15 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 		return err
 	}
 
-	SMSFieldsCount := len(types.SMSCSVHeaders)
-	MMSFieldsCount := len(types.MMSCSVHeaders)
-
 	for id, line := range ss {
 		var addressFieldIndex int
-		if len(line) == SMSFieldsCount {
-			addressFieldIndex = 2
-		} else if len(line) == MMSFieldsCount {
-			addressFieldIndex = 13
-		} else {
-			continue
+		switch message {
+		case "sms":
+ 			addressFieldIndex = 2
+		case "mms":
+ 			addressFieldIndex = 13
 		}
-
+		
 		recipientID, err := strconv.ParseUint(line[addressFieldIndex], 10, 64)
 		if err != nil {
 			panic(err)

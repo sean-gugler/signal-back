@@ -6,8 +6,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
-	"github.com/xeals/signal-back/signal"
-	"github.com/xeals/signal-back/types"
+	"github.com/abstern/signal-back/signal"
+	"github.com/abstern/signal-back/types"
 )
 
 // Analyse fulfils the `analyse` subcommand.

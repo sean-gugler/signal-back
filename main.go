@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/urfave/cli"
-	"github.com/xeals/signal-back/cmd"
-	"github.com/xeals/signal-back/types"
+	"github.com/abstern/signal-back/cmd"
+	"github.com/abstern/signal-back/types"
 )
 
 var version = "devel"

@@ -17,7 +17,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/xeals/signal-back/signal"
+	"github.com/abstern/signal-back/signal"
 	"golang.org/x/crypto/hkdf"
 )
 

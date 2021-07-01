@@ -1,4 +1,4 @@
-module github.com/xeals/signal-back/signal
+module github.com/abstern/signal-back/signal
 
 go 1.12
 

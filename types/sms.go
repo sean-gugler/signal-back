@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/xeals/signal-back/signal"
+	"github.com/abstern/signal-back/signal"
 )
 
 // Character sets as specified by IANA.

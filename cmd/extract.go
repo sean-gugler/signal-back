@@ -10,7 +10,7 @@ import (
 	"github.com/h2non/filetype"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
-	"github.com/xeals/signal-back/types"
+	"github.com/abstern/signal-back/types"
 )
 
 // Extract fulfils the `extract` subcommand.

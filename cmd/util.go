@@ -35,15 +35,15 @@ const SubcommandHelp = `Usage: {{.HelpName}} [OPTION...] BACKUPFILE
 `
 
 var coreFlags = []cli.Flag{
-	cli.StringFlag{
+	&cli.StringFlag{
 		Name:  "password, p",
 		Usage: "use `PASS` as password for backup file",
 	},
-	cli.StringFlag{
+	&cli.StringFlag{
 		Name:  "pwdfile, P",
 		Usage: "read password from `FILE`",
 	},
-	cli.BoolFlag{
+	&cli.BoolFlag{
 		Name:  "verbose, v",
 		Usage: "enable verbose logging output",
 	},

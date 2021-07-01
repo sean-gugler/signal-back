@@ -16,11 +16,11 @@ var Check = cli.Command{
 	UsageText:          "Attempts to decrypt the provided backup and do nothing with it except verify that it's readable\n from start to finish. Enables verbose logging by default.",
 	CustomHelpTemplate: SubcommandHelp,
 	Flags: []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "password, p",
 			Usage: "use `PASS` as password for backup file",
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "pwdfile, P",
 			Usage: "read password from `FILE`",
 		},

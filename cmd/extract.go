@@ -20,7 +20,7 @@ var Extract = cli.Command{
 	UsageText:          "Decrypt files embedded in the backup.",
 	CustomHelpTemplate: SubcommandHelp,
 	Flags: append([]cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "outdir, o",
 			Usage: "output attachments to `DIRECTORY`",
 		},

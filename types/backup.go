@@ -142,9 +142,9 @@ func (bf *BackupFile) Frame() (*signal.BackupFrame, error) {
 // DecryptAttachment reads the attachment immediately next in the file's bytes, using a streaming
 // intermediate buffer of size ATTACHMENT_BUFFER_SIZE.
 func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
-	if length == 0 {
-		return errors.New("can't read attachment of length 0")
-	}
+	// if length == 0 {
+	// 	return errors.New("can't read attachment of length 0")
+	// } 
 
 	uint32ToBytes(bf.IV, bf.Counter)
 	bf.Counter++

@@ -100,7 +100,7 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 			if strings.HasPrefix(*s.Statement, "INSERT INTO recipient") {
 				id, recipient, err := types.NewRecipientFromStatement(s)
 				if err != nil {
-					return errors.Wrap(err, "recipîent statement couldn't be generated")
+					return errors.Wrap(err, "recipient statement couldn't be generated")
 				}
 				recipients[id] = *recipient
 			}
@@ -204,7 +204,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 			if strings.HasPrefix(*s.Statement, "INSERT INTO recipient") {
 				id, recipient, err := types.NewRecipientFromStatement(s)
 				if err != nil {
-					return errors.Wrap(err, "recipîent statement couldn't be generated")
+					return errors.Wrap(err, "recipient statement couldn't be generated")
 				}
 				recipients[id] = *recipient
 			}

@@ -38,7 +38,7 @@ func main() {
 	// 	// -- Logging
 
 	// 	if c.String("log") != "" {
-	// 		f, err := os.OpenFile(c.String("log"), os.O_CREATE|os.O_WRONLY, 0644)
+	// 		f, err := os.OpenFile(c.String("log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	// 		if err != nil {
 	// 			return errors.Wrap(err, "unable to create logging file")
 	// 		}

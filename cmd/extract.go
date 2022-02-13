@@ -82,7 +82,7 @@ func ExtractAttachments(bf *types.BackupFile) error {
 			ext := getExt(mime, id)
 
 			fileName := fmt.Sprintf("%v%s", id, ext)
-			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, os.ModePerm)
+			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
 			if err != nil {
 				return errors.Wrap(err, "failed to open output file")

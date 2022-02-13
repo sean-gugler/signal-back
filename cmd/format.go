@@ -50,7 +50,7 @@ var Format = cli.Command{
 		var out io.Writer
 		if c.String("output") != "" {
 			var file *os.File
-			file, err = os.OpenFile(c.String("output"), os.O_CREATE|os.O_WRONLY, 0644)
+			file, err = os.OpenFile(c.String("output"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 			out = io.Writer(file)
 			if err != nil {
 				return errors.Wrap(err, "unable to open output file")

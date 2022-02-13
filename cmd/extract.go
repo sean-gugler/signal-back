@@ -61,7 +61,7 @@ func ExtractAttachments(bf *types.BackupFile) error {
 	defer bf.Close()
 
 	for {
-		f, err := bf.Frame()
+		_, f, err := bf.Frame()
 		if err == io.EOF {
 			return nil
 		} else if err != nil {

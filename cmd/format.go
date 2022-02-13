@@ -320,8 +320,8 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 // debugging.
 func Raw(bf *types.BackupFile, out io.Writer) error {
 	fns := types.ConsumeFuncs{
-		StatementFunc: func(s *signal.SqlStatement) error {
-			_, err := out.Write(append([]byte(s.String()), '\n'))
+		DebugFunc: func(s string) error {
+			_, err := out.Write(append([]byte(s), '\n'))
 			return err
 		},
 	}

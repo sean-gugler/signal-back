@@ -43,6 +43,7 @@ type BackupFile struct {
 	MacKey    []byte
 	Mac       hash.Hash
 	IV        []byte
+	Salt      []byte
 	Counter   uint32
 }
 
@@ -94,16 +95,17 @@ func NewBackupFile(path, password string) (*BackupFile, error) {
 		MacKey:    macKey,
 		Mac:       hmac.New(crypto.SHA256.New, macKey),
 		IV:        iv,
+		Salt:      frame.Header.Salt,
 		Counter:   bytesToUint32(iv),
 	}, nil
 }
 
 // Frame returns the next frame in the file.
-func (bf *BackupFile) Frame() (*signal.BackupFrame, error) {
+func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 	length := make([]byte, 4)
 	_, err := io.ReadFull(bf.file, length)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
 	frameLength := bytesToUint32(length)
@@ -118,7 +120,7 @@ func (bf *BackupFile) Frame() (*signal.BackupFrame, error) {
 	ourMac := bf.Mac.Sum(nil)
 
 	if bytes.Equal(theirMac, ourMac) {
-		return nil, errors.New("Bad MAC")
+		return 0, nil, errors.New("Bad MAC")
 	}
 
 	uint32ToBytes(bf.IV, bf.Counter)
@@ -126,7 +128,7 @@ func (bf *BackupFile) Frame() (*signal.BackupFrame, error) {
 
 	aesCipher, err := aes.NewCipher(bf.CipherKey)
 	if err != nil {
-		return nil, errors.New("Bad cipher")
+		return 0, nil, errors.New("Bad cipher")
 	}
 	stream := cipher.NewCTR(aesCipher, bf.IV)
 
@@ -136,7 +138,7 @@ func (bf *BackupFile) Frame() (*signal.BackupFrame, error) {
 	decoded := new(signal.BackupFrame)
 	proto.Unmarshal(output, decoded)
 
-	return decoded, nil
+	return frameLength, decoded, nil
 }
 
 // DecryptAttachment reads the attachment immediately next in the file's bytes, using a streaming
@@ -195,6 +197,7 @@ type ConsumeFuncs struct {
 	AttachmentFunc func(*signal.Attachment) error
 	AvatarFunc     func(*signal.Avatar) error
 	StatementFunc  func(*signal.SqlStatement) error
+	DebugFunc      func(string) error
 }
 
 func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
@@ -206,6 +209,9 @@ func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
 			return bf.DecryptAttachment(a.GetLength(), ioutil.Discard)
 		},
 		StatementFunc: func(s *signal.SqlStatement) error {
+			return nil
+		},
+		DebugFunc: func(s string) error {
 			return nil
 		},
 	}
@@ -221,6 +227,7 @@ func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
 // spent.
 func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 	var (
+		frame_length uint32
 		f       *signal.BackupFrame
 		err     error
 		discard = DiscardConsumeFuncs(bf)
@@ -237,13 +244,33 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 	if fns.StatementFunc == nil {
 		fns.StatementFunc = discard.StatementFunc
 	}
+	if fns.DebugFunc == nil {
+		fns.DebugFunc = discard.DebugFunc
+	}
 
-	for {
-		f, err = bf.Frame()
+	for frame_number := 1; ; frame_number++ {
+		pos, serr := bf.file.Seek(0, io.SeekCurrent)
+		if serr != nil {
+			return errors.Wrap(serr, "consume [seek]")
+		}
+
+		frame_length, f, err = bf.Frame()
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return err
+		}
+
+		if frame_number == 1 {
+			s := fmt.Sprintf("%08X: FRAME %d length %d\nheader:<iv:%x, salt:%x>", 0, 0, pos, bf.IV, bf.Salt)
+			if err = fns.DebugFunc(s); err != nil {
+				return errors.Wrap(err, "consume [debug]")
+			}
+		}
+
+		s := fmt.Sprintf("%08X: FRAME %d length %d\n%v", pos, frame_number, frame_length, f)
+		if err = fns.DebugFunc(s); err != nil {
+			return errors.Wrap(err, "consume [debug]")
 		}
 
 		if a := f.GetAttachment(); a != nil {
@@ -279,7 +306,7 @@ func (bf *BackupFile) Slurp() ([]*signal.BackupFrame, error) {
 	defer bf.Close()
 
 	for {
-		f, err := bf.Frame()
+		_, f, err := bf.Frame()
 		if err == io.EOF {
 			return frames, nil
 		} else if err != nil {

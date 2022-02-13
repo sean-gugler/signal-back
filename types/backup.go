@@ -196,6 +196,7 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 type ConsumeFuncs struct {
 	AttachmentFunc func(*signal.Attachment) error
 	AvatarFunc     func(*signal.Avatar) error
+	StickerFunc    func(*signal.Sticker) error
 	StatementFunc  func(*signal.SqlStatement) error
 	DebugFunc      func(string) error
 }
@@ -206,6 +207,9 @@ func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
 			return bf.DecryptAttachment(a.GetLength(), ioutil.Discard)
 		},
 		AvatarFunc: func(a *signal.Avatar) error {
+			return bf.DecryptAttachment(a.GetLength(), ioutil.Discard)
+		},
+		StickerFunc: func(a *signal.Sticker) error {
 			return bf.DecryptAttachment(a.GetLength(), ioutil.Discard)
 		},
 		StatementFunc: func(s *signal.SqlStatement) error {
@@ -240,6 +244,9 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 	}
 	if fns.AvatarFunc == nil {
 		fns.AvatarFunc = discard.AvatarFunc
+	}
+	if fns.StickerFunc == nil {
+		fns.StickerFunc = discard.StickerFunc
 	}
 	if fns.StatementFunc == nil {
 		fns.StatementFunc = discard.StatementFunc
@@ -281,6 +288,11 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 		if a := f.GetAvatar(); a != nil {
 			if err = fns.AvatarFunc(a); err != nil {
 				return errors.Wrap(err, "consume [avatar]")
+			}
+		}
+		if a := f.GetSticker(); a != nil {
+			if err = fns.StickerFunc(a); err != nil {
+				return errors.Wrap(err, "consume [sticker]")
 			}
 		}
 		if stmt := f.GetStatement(); stmt != nil {

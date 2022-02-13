@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/h2non/filetype"
 	"github.com/pkg/errors"
@@ -68,10 +69,14 @@ func ExtractAttachments(bf *types.BackupFile) error {
 			return errors.Wrap(err, "extraction")
 		}
 
-		ps := f.GetStatement().GetParameters()
-		if len(ps) == 25 { // Contains blob information
-			aEncs[*ps[19].IntegerParameter] = *ps[3].StringParameter
-			log.Printf("found attachment metadata %v: `%v`\n", *ps[19].IntegerParameter, ps)
+		stmt := f.GetStatement().GetStatement()
+		if strings.HasPrefix(stmt, "INSERT INTO part") {
+			ps := f.GetStatement().GetParameters()
+			id := *ps[19].IntegerParameter
+			mime := *ps[3].StringParameter
+
+			aEncs[id] = mime
+			log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
 		}
 
 		if a := f.GetAttachment(); a != nil {

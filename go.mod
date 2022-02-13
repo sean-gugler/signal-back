@@ -3,7 +3,7 @@ module github.com/xeals/signal-back
 go 1.12
 
 require (
-	github.com/golang/protobuf v1.1.0
+	github.com/golang/protobuf v1.5.0
 	github.com/h2non/filetype v1.0.5
 	github.com/pkg/errors v0.8.1
 	github.com/urfave/cli v1.20.0

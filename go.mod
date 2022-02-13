@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/golang/protobuf v1.5.0
-	github.com/h2non/filetype v1.0.5
+	github.com/h2non/filetype v1.1.3
 	github.com/pkg/errors v0.8.1
 	github.com/urfave/cli v1.20.0
 	github.com/xeals/signal-back/signal v0.0.0

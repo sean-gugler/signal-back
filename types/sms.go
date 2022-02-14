@@ -236,19 +236,19 @@ func NewMMSFromStatement(stmt *signal.SqlStatement) (uint64, *MMS, error) {
 
 	if mms.MessageType != nil {
 		if err := SetMMSMessageType(*mms.MessageType, &xml); err != nil {
-			log.Fatalf("%v\nplease report this issue, as well as (if possible) details about the MMS\nthe ID of the offending MMS is: %d", err, mms.ID)
+			log.Fatalf("%v\nplease report this issue, as well as (if possible) details about the MMS\nID = %d, body = %s\n\n%v", err, mms.ID, *mms.Body, stmt)
 		}
 	}
 
-	if mms.RetrSt != nil {
-		xml.RetrSt = strconv.FormatUint(*mms.RetrSt, 10)
-	}
-	if mms.CtCls != nil {
-		xml.CtCls = strconv.FormatUint(*mms.CtCls, 10)
-	}
-	if mms.SubCs != nil {
-		xml.SubCs = strconv.FormatUint(*mms.SubCs, 10)
-	}
+	// if mms.RetrSt != nil {
+		// xml.RetrSt = strconv.FormatUint(*mms.RetrSt, 10)
+	// }
+	// if mms.CtCls != nil {
+		// xml.CtCls = strconv.FormatUint(*mms.CtCls, 10)
+	// }
+	// if mms.SubCs != nil {
+		// xml.SubCs = strconv.FormatUint(*mms.SubCs, 10)
+	// }
 	if mms.Body != nil {
 		xml.Body = mms.Body
 	}
@@ -264,45 +264,45 @@ func NewMMSFromStatement(stmt *signal.SqlStatement) (uint64, *MMS, error) {
 	if mms.Expiry != nil {
 		xml.Exp = strconv.FormatUint(*mms.Expiry, 10)
 	}
-	if mms.MCls != nil {
-		xml.MCls = *mms.MCls
-	}
-	if mms.DTm != nil {
-		xml.DTm = strconv.FormatUint(*mms.DTm, 10)
-	}
-	if mms.ReadStatus != nil {
-		xml.ReadStatus = strconv.FormatUint(*mms.ReadStatus, 10)
-	}
-	if mms.CtT != nil {
-		xml.CtT = *mms.CtT
-	}
-	if mms.RetrTxtCs != nil {
-		xml.RetrTxtCs = strconv.FormatUint(*mms.RetrTxtCs, 10)
-	}
-	if mms.DRpt != nil {
-		xml.DRpt = *mms.DRpt
-	}
-	if mms.MID != nil {
-		xml.MId = *mms.MID
-	}
-	if mms.Pri != nil {
-		xml.Pri = *mms.Pri
-	}
-	if mms.Rr != nil {
-		xml.Rr = *mms.Rr
-	}
-	if mms.RespTxt != nil {
-		xml.RespTxt = *mms.RespTxt
-	}
-	if mms.RptA != nil {
-		xml.RptA = strconv.FormatUint(*mms.RptA, 10)
-	}
-	if mms.RetrTxt != nil {
-		xml.RetrTxt = *mms.RetrTxt
-	}
-	if mms.RespSt != nil {
-		xml.RespSt = *mms.RespSt
-	}
+	// if mms.MCls != nil {
+		// xml.MCls = *mms.MCls
+	// }
+	// if mms.DTm != nil {
+		// xml.DTm = strconv.FormatUint(*mms.DTm, 10)
+	// }
+	// if mms.ReadStatus != nil {
+		// xml.ReadStatus = strconv.FormatUint(*mms.ReadStatus, 10)
+	// }
+	// if mms.CtT != nil {
+		// xml.CtT = *mms.CtT
+	// }
+	// if mms.RetrTxtCs != nil {
+		// xml.RetrTxtCs = strconv.FormatUint(*mms.RetrTxtCs, 10)
+	// }
+	// if mms.DRpt != nil {
+		// xml.DRpt = *mms.DRpt
+	// }
+	// if mms.MID != nil {
+		// xml.MId = *mms.MID
+	// }
+	// if mms.Pri != nil {
+		// xml.Pri = *mms.Pri
+	// }
+	// if mms.Rr != nil {
+		// xml.Rr = *mms.Rr
+	// }
+	// if mms.RespTxt != nil {
+		// xml.RespTxt = *mms.RespTxt
+	// }
+	// if mms.RptA != nil {
+		// xml.RptA = strconv.FormatUint(*mms.RptA, 10)
+	// }
+	// if mms.RetrTxt != nil {
+		// xml.RetrTxt = *mms.RetrTxt
+	// }
+	// if mms.RespSt != nil {
+		// xml.RespSt = *mms.RespSt
+	// }
 	if mms.MessageSize != nil {
 		xml.MSize = mms.MessageSize
 	}

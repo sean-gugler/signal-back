@@ -292,45 +292,46 @@ func ParametersToSMS(ps []*signal.SqlStatement_SqlParameter) *SQLSMS {
 
 // SQLMMS info
 //
-// https://github.com/signalapp/Signal-Android/blob/master/src/org/thoughtcrime/securesms/database/MmsDatabase.java#L110
+// https://github.com/signalapp/Signal-Android/blob/master/app/src/main/java/org/thoughtcrime/securesms/database/MmsDatabase.java#L132
 type SQLMMS struct {
 	ID                   uint64
 	ThreadID             *uint64
 	DateSent             *uint64
 	DateReceived         *uint64
+	DateServer           *uint64 // default -1
 	MessageBox           *uint64
 	Read                 uint64 // default 0
-	MID                  *string
-	Sub                  *string
-	SubCs                *uint64
+	// MID                  *string
+	// Sub                  *string
+	// SubCs                *uint64
 	Body                 *string
 	PartCount            *uint64
-	CtT                  *string
+	// CtT                  *string
 	ContentLocation      *string
 	RecipientID          *string
 	AddressDeviceID      *uint64
 	Expiry               *uint64
-	MCls                 *string
+	// MCls                 *string
 	MessageType          *uint64
-	V                    *uint64
+	// V                    *uint64
 	MessageSize          *uint64
-	Pri                  *uint64
-	Rr                   *uint64
-	RptA                 *uint64
-	RespSt               *uint64
+	// Pri                  *uint64
+	// Rr                   *uint64
+	// RptA                 *uint64
+	// RespSt               *uint64
 	Status               *uint64
 	TransactionID        *string
-	RetrSt               *uint64
-	RetrTxt              *string
-	RetrTxtCs            *uint64
-	ReadStatus           *uint64
-	CtCls                *uint64
-	RespTxt              *string
-	DTm                  *uint64
+	// RetrSt               *uint64
+	// RetrTxt              *string
+	// RetrTxtCs            *uint64
+	// ReadStatus           *uint64
+	// CtCls                *uint64
+	// RespTxt              *string
+	// DTm                  *uint64
 	DeliveryReceiptCount uint64  // default 0
 	MismatchedIdentities *string // default null
 	NetworkFailure       *string // default null
-	DRpt                 *uint64
+	// DRpt                 *uint64
 	SubscriptionID       uint64 // default -1
 	ExpiresIn            uint64 // default 0
 	ExpireStarted        uint64 // default 0
@@ -341,8 +342,20 @@ type SQLMMS struct {
 	QuoteBody            *string
 	QuoteAttachment      uint64 // default -1
 	QuoteMissing         uint64 // default 0
+	QuoteMentions        *[]byte // default null
 	SharedContacts       *string
 	Unidentified         uint64 // default 0
+	LinkPreviews         *string
+	ViewOnce             uint64 // default 0
+	ReactionsUnread      uint64 // default 0
+	ReactionsLastSeen    uint64 // default -1
+	RemoteDeleted        uint64 // default 0
+	MentionsSelf         uint64 // default 0
+	ModifiedTimestamp    uint64 // default 0
+	ViewedReceiptCount   uint64 // default 0
+	ServerGUID           *string // default null
+	ReceiptTimestamp     uint64 // default -1
+	MessageRanges        *[]byte // default null
 }
 
 // StatementToMMS converts a of SQL statement to a single MMS.
@@ -364,37 +377,37 @@ func ParametersToMMS(ps []*signal.SqlStatement_SqlParameter) *SQLMMS {
 		DateReceived:         ps[3].IntegerParameter,
 		MessageBox:           ps[4].IntegerParameter,
 		Read:                 ps[5].GetIntegerParameter(),
-		MID:                  ps[6].StringParameter,
-		Sub:                  ps[7].StringParameter,
-		SubCs:                ps[8].IntegerParameter,
+		// MID:                  ps[6].StringParameter,
+		// Sub:                  ps[7].StringParameter,
+		// SubCs:                ps[8].IntegerParameter,
 		Body:                 ps[9].StringParameter,
 		PartCount:            ps[10].IntegerParameter,
-		CtT:                  ps[11].StringParameter,
+		// CtT:                  ps[11].StringParameter,
 		ContentLocation:      ps[12].StringParameter,
 		RecipientID:          ps[13].StringParameter,
 		AddressDeviceID:      ps[14].IntegerParameter,
 		Expiry:               ps[15].IntegerParameter,
-		MCls:                 ps[16].StringParameter,
+		// MCls:                 ps[16].StringParameter,
 		MessageType:          ps[17].IntegerParameter,
-		V:                    ps[18].IntegerParameter,
+		// V:                    ps[18].IntegerParameter,
 		MessageSize:          ps[19].IntegerParameter,
-		Pri:                  ps[20].IntegerParameter,
-		Rr:                   ps[21].IntegerParameter,
-		RptA:                 ps[22].IntegerParameter,
-		RespSt:               ps[23].IntegerParameter,
+		// Pri:                  ps[20].IntegerParameter,
+		// Rr:                   ps[21].IntegerParameter,
+		// RptA:                 ps[22].IntegerParameter,
+		// RespSt:               ps[23].IntegerParameter,
 		Status:               ps[24].IntegerParameter,
 		TransactionID:        ps[25].StringParameter,
-		RetrSt:               ps[26].IntegerParameter,
-		RetrTxt:              ps[27].StringParameter,
-		RetrTxtCs:            ps[28].IntegerParameter,
-		ReadStatus:           ps[29].IntegerParameter,
-		CtCls:                ps[30].IntegerParameter,
-		RespTxt:              ps[31].StringParameter,
-		DTm:                  ps[32].IntegerParameter,
+		// RetrSt:               ps[26].IntegerParameter,
+		// RetrTxt:              ps[27].StringParameter,
+		// RetrTxtCs:            ps[28].IntegerParameter,
+		// ReadStatus:           ps[29].IntegerParameter,
+		// CtCls:                ps[30].IntegerParameter,
+		// RespTxt:              ps[31].StringParameter,
+		// DTm:                  ps[32].IntegerParameter,
 		DeliveryReceiptCount: ps[33].GetIntegerParameter(),
 		MismatchedIdentities: ps[34].StringParameter,
 		NetworkFailure:       ps[35].StringParameter,
-		DRpt:                 ps[36].IntegerParameter,
+		// DRpt:                 ps[36].IntegerParameter,
 		SubscriptionID:       ps[37].GetIntegerParameter(),
 		ExpiresIn:            ps[38].GetIntegerParameter(),
 		ExpireStarted:        ps[39].GetIntegerParameter(),

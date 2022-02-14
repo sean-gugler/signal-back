@@ -20,6 +20,7 @@ func main() {
 	app.CustomAppHelpTemplate = cmd.AppHelp
 	app.Version = version
 	app.Commands = []cli.Command{
+		cmd.Decrypt,
 		cmd.Format,
 		cmd.Analyse,
 		cmd.Extract,

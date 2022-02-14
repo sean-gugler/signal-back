@@ -90,22 +90,46 @@ func JSON(bf *types.BackupFile, out io.Writer) error {
 	return nil
 }
 
+func csvHeaders(body string) []string {
+	cols := strings.Split(body, ", ")
+	h := make([]string, 0, len(cols))
+	for _, s := range cols {
+		h = append(h, s[:strings.IndexRune(s, ' ')])
+	}
+	return h
+}
+
 // CSV dumps the raw backup data into a comma-separated value format.
 func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 	ss := make([][]string, 0)
 	recipients := map[uint64]types.Recipient{}
 
+	var (
+		addressFieldIndex int
+		headers []string
+		create = fmt.Sprintf(`CREATE TABLE "%s" (`, message)
+		insert = "INSERT INTO " + message
+	)
+
 	fns := types.ConsumeFuncs{
 		StatementFunc: func(s *signal.SqlStatement) error {
-			if strings.HasPrefix(*s.Statement, "INSERT INTO recipient") {
+			stmt := *s.Statement
+			switch {
+			case strings.HasPrefix(stmt, create):
+				headers = csvHeaders(stmt[ len(create) : len(stmt)-1 ])
+				for i, field := range headers {
+					if field == "address" {
+						addressFieldIndex = i
+						break
+					}
+				}
+			case strings.HasPrefix(stmt, "INSERT INTO recipient"):
 				id, recipient, err := types.NewRecipientFromStatement(s)
 				if err != nil {
 					return errors.Wrap(err, "recipient statement couldn't be generated")
 				}
 				recipients[id] = *recipient
-			}
-
-			if (*s.Statement)[:15] == "INSERT INTO "+message {
+			case strings.HasPrefix(stmt, insert):
 				ss = append(ss, types.StatementToStringArray(s))
 			}
 			return nil
@@ -117,14 +141,6 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 	}
 
 	for id, line := range ss {
-		var addressFieldIndex int
-		switch message {
-		case "sms":
- 			addressFieldIndex = 2
-		case "mms":
- 			addressFieldIndex = 13
-		}
-		
 		recipientID, err := strconv.ParseUint(line[addressFieldIndex], 10, 64)
 		if err != nil {
 			panic(err)
@@ -135,13 +151,6 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 	}
 
 	w := csv.NewWriter(out)
-	var headers []string
-	if message == "mms" {
-		headers = types.MMSCSVHeaders
-	} else {
-		headers = types.SMSCSVHeaders
-	}
-
 	if err := w.Write(headers); err != nil {
 		return errors.Wrap(err, "unable to write CSV headers")
 	}

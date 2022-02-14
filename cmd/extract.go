@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	filetype_types "github.com/h2non/filetype/types"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
+	"github.com/xeals/signal-back/signal"
 	"github.com/xeals/signal-back/types"
 )
 
@@ -61,25 +61,20 @@ func ExtractAttachments(bf *types.BackupFile) error {
 	}()
 	defer bf.Close()
 
-	for {
-		_, f, err := bf.Frame()
-		if err == io.EOF {
+	fns := types.ConsumeFuncs{
+		StatementFunc: func(s *signal.SqlStatement) error {
+			stmt := s.GetStatement()
+			if strings.HasPrefix(stmt, "INSERT INTO part") {
+				ps := s.GetParameters()
+				id := *ps[19].IntegerParameter
+				mime := *ps[3].StringParameter
+
+				aEncs[id] = mime
+				log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
+			}
 			return nil
-		} else if err != nil {
-			return errors.Wrap(err, "extraction")
-		}
-
-		stmt := f.GetStatement().GetStatement()
-		if strings.HasPrefix(stmt, "INSERT INTO part") {
-			ps := f.GetStatement().GetParameters()
-			id := *ps[19].IntegerParameter
-			mime := *ps[3].StringParameter
-
-			aEncs[id] = mime
-			log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
-		}
-
-		if a := f.GetAttachment(); a != nil {
+		},
+		AttachmentFunc: func(a *signal.Attachment) error {
 			log.Printf("found attachment binary %v\n", *a.AttachmentId)
 			id := *a.AttachmentId
 
@@ -136,8 +131,11 @@ func ExtractAttachments(bf *types.BackupFile) error {
 					return errors.Wrap(err, "unable to rename output file")
 				}
 			}
-		}
+			return nil
+		},
 	}
+
+	return bf.Consume(fns)
 }
 
 // No simple API like 'GetExtension(mime)' found in https://github.com/h2non/filetype

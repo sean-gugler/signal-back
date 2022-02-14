@@ -23,17 +23,17 @@ import (
 var Format = cli.Command{
 	Name:               "format",
 	Usage:              "Read and format the backup file",
-	UsageText:          "Parse and transform the backup file into other formats.\nValid formats include: CSV, XML, RAW.",
+	UsageText:          "Parse and transform the backup file into other formats.",
 	CustomHelpTemplate: SubcommandHelp,
 	Flags: append([]cli.Flag{
 		&cli.StringFlag{
 			Name:  "format, f",
-			Usage: "output the backup as `FORMAT`",
+			Usage: "output the backup as `FORMAT` (xml, csv, raw)",
 			Value: "xml",
 		},
 		&cli.StringFlag{
 			Name:  "message, m",
-			Usage: "format `TYPE` messages",
+			Usage: "format `TYPE` messages (sms, mms)",
 			Value: "sms",
 		},
 		&cli.StringFlag{

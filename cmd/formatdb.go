@@ -19,11 +19,11 @@ import (
 	"github.com/xeals/signal-back/types"
 )
 
-// Format fulfils the `format` subcommand.
-var Format = cli.Command{
-	Name:               "format",
-	Usage:              "Read and format the backup file",
-	UsageText:          "Parse and transform the backup file into other formats.",
+// Format fulfils the `formatdb` subcommand.
+var FormatDB = cli.Command{
+	Name:               "formatDB",
+	Usage:              "Extract messages from the database",
+	UsageText:          "Parse and transform messages in the database into other formats.",
 	CustomHelpTemplate: SubcommandHelp,
 	Flags: append([]cli.Flag{
 		&cli.StringFlag{
@@ -38,10 +38,20 @@ var Format = cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "output, o",
-			Usage: "write decrypted format to `FILE`",
+			Usage: "write formatted data to `FILE`",
 		},
 	}, coreFlags...),
 	Action: func(c *cli.Context) error {
+		if c.Bool("verbose") {
+			log.SetOutput(os.Stderr)
+		} else {
+			log.SetOutput(ioutil.Discard)
+		}
+		if c.Args().Get(0) == "" {
+			return nil, errors.New("must specify a Signal backup file")
+		}
+
+
 		bf, err := setup(c)
 		if err != nil {
 			return err
@@ -66,9 +76,9 @@ var Format = cli.Command{
 
 		switch strings.ToLower(c.String("format")) {
 		case "csv":
-			err = CSV(bf, strings.ToLower(c.String("message")), out)
+			err = CSV_db(bf, strings.ToLower(c.String("message")), out)
 		case "xml":
-			err = XML(bf, out)
+			err = XML_db(bf, out)
 		case "json":
 			// err = formatJSON(bf, out)
 			return errors.New("JSON is still TODO")

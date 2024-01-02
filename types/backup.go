@@ -22,9 +22,9 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-// ATTACHMENT_BUFFER_SIZE is the size of the buffer in bytes used for decrypting attachments. Larger
-// values of this will consume more memory, but may decrease the overall time taken to decrypt an
-// attachment.
+// ATTACHMENT_BUFFER_SIZE is the size of the buffer in bytes used for decrypting attachments.
+// Larger values of this consume more memory, but have been measured to not actually decrease
+// the overall time taken.
 const ATTACHMENT_BUFFER_SIZE = 8192
 
 // ProtoCommitHash is the commit hash of the Signal Protobuf spec.

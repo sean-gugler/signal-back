@@ -24,6 +24,7 @@ var Decrypt = cli.Command{
 		&cli.StringFlag{
 			Name:  "output, o",
 			Usage: "write decrypted database to `FILE`",
+			Value: "backup.db",
 		},
 	}, coreFlags...),
 	Action: func(c *cli.Context) error {
@@ -33,6 +34,7 @@ var Decrypt = cli.Command{
 		}
 
 		fileName := c.String("output")
+		log.Printf("Begin decrypt into %s", fileName)
 
 		if err = os.Remove(fileName); err != nil && !os.IsNotExist(err) {
 			return errors.Wrap(err, "creating fresh database")

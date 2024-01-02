@@ -24,6 +24,7 @@ var Extract = cli.Command{
 		&cli.StringFlag{
 			Name:  "outdir, o",
 			Usage: "output attachments to `DIRECTORY`",
+			Value: "attachments",
 		},
 	}, coreFlags...),
 	Action: func(c *cli.Context) error {

@@ -167,9 +167,10 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 
 	for length > 0 {
 		// Go can't read an arbitrary number of bytes,
-		// so we have to downsize the containing buffer instead.
+		// so we have to downsize the buffers instead.
 		if length < ATTACHMENT_BUFFER_SIZE {
 			buf = make([]byte, length)
+			output = make([]byte, length)
 		}
 		n, err := bf.file.Read(buf)
 		if err != nil {

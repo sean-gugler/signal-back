@@ -174,7 +174,7 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 		}
 		n, err := bf.file.Read(buf)
 		if err != nil {
-			return errors.Wrap(err, "failed to read att")
+			return errors.Wrap(err, "failed to read attachment data")
 		}
 		bf.Mac.Write(buf)
 

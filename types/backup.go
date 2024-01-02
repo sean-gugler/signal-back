@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
@@ -14,6 +13,8 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	// "log"
+	// "encoding/hex"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -52,7 +53,7 @@ type BackupFile struct {
 func NewBackupFile(path, password string) (*BackupFile, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to open backup file")
+		return nil, errors.Wrap(err, "unable to get size of backup file")
 	}
 	size := info.Size()
 
@@ -113,14 +114,16 @@ func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 
 	io.ReadFull(bf.file, frame)
 
-	theirMac := frame[:len(frame)-10]
+	messageLength := len(frame)-10
+	theirMac := frame[messageLength:]
 
 	bf.Mac.Reset()
-	bf.Mac.Write(frame)
-	ourMac := bf.Mac.Sum(nil)
+	bf.Mac.Write(frame[:messageLength])
+	ourMac := bf.Mac.Sum(nil)[:10]
 
-	if bytes.Equal(theirMac, ourMac) {
-		return 0, nil, errors.New("Bad MAC")
+	if !hmac.Equal(theirMac, ourMac) {
+		// log.Printf("MAC expect %s found %s", hex.EncodeToString(ourMac), hex.EncodeToString(theirMac))
+		return 0, nil, errors.New("Decryption error, wrong key")
 	}
 
 	uint32ToBytes(bf.IV, bf.Counter)
@@ -132,8 +135,8 @@ func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 	}
 	stream := cipher.NewCTR(aesCipher, bf.IV)
 
-	output := make([]byte, len(frame)-10)
-	stream.XORKeyStream(output, frame[:len(frame)-10])
+	output := make([]byte, messageLength)
+	stream.XORKeyStream(output, frame[:messageLength])
 
 	decoded := new(signal.BackupFrame)
 	proto.Unmarshal(output, decoded)
@@ -156,6 +159,7 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 		return errors.New("Bad cipher")
 	}
 	stream := cipher.NewCTR(aesCipher, bf.IV)
+	bf.Mac.Reset()
 	bf.Mac.Write(bf.IV)
 
 	buf := make([]byte, ATTACHMENT_BUFFER_SIZE)
@@ -183,10 +187,11 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 
 	theirMac := make([]byte, 10)
 	io.ReadFull(bf.file, theirMac)
-	ourMac := bf.Mac.Sum(nil)
+	ourMac := bf.Mac.Sum(nil)[:10]
 
-	if bytes.Equal(theirMac, ourMac) {
-		return errors.New("Bad MAC")
+	if !hmac.Equal(theirMac, ourMac) {
+		// log.Printf("MAC expect %s found %s", hex.EncodeToString(ourMac), hex.EncodeToString(theirMac))
+		return errors.New("Decryption error, wrong key")
 	}
 
 	return nil

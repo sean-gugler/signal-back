@@ -26,10 +26,6 @@ var Decrypt = cli.Command{
 			Usage: "write decrypted database to `FILE`",
 			Value: "backup.db",
 		},
-		&cli.StringFlag{
-			Name:  "filter",
-			Usage: "debug filter",
-		},
 	}, coreFlags...),
 	Action: func(c *cli.Context) error {
 		bf, err := setup(c)
@@ -52,12 +48,7 @@ var Decrypt = cli.Command{
 			db.Close()
 		}()
 
-		// bf.Counter = 0
-		// db.Exec("CREATE TABLE roster (_id INTEGER PRIMARY KEY, age INTEGER, name TEXT)")
-		// db.Exec("INSERT INTO roster VALUES (?,?,?)", 42, 29, "Doe")
-		// return nil
-
-		return WriteDatabase(bf, db, c.String("filter"))
+		return WriteDatabase(bf, db)
 	},
 }
 
@@ -70,55 +61,7 @@ func unwrap(s string, delim string) string {
 	}
 }
 
-type Column struct {
-	Name string
-	Type string
-}
-
-// https://www.sqlite.org/datatype3.html#type_affinity
-//     "The type affinity of a column is the recommended type for data stored
-//     in that column. The important idea here is that the type is recommended,
-//     not required. Any column can still store any type of data."
-func schema(statement_params string) []Column {
-	// remove parentheses, then split by commas
-	cols := strings.Split(unwrap(statement_params, "()"), ",")
-
-	// Directives like "UNIQUE(field, field)" get split by commas, too.
-	// Handle this by skipping opening through closing parentheses.
-	inParen := false
-
-	// convert each text description into a Column
-	s := make([]Column, 0, len(cols))
-	for _, desc := range cols {
-		trimmed := strings.TrimSpace(desc)
-		parts := strings.SplitN(trimmed, " ", 3)
-		// ignore parts[3...], optional tags like "DEFAULT" or "PRIMARY"
-
-		name := parts[0]
-		if strings.Index(name, "(") != -1 {
-			inParen = true
-		}
-		if inParen {
-			if strings.Index(name, ")") != -1 {
-				inParen = false
-			}
-			continue
-		}
-
-		sqlType := "<none>"
-		if len(parts) > 1 {
-			sqlType = parts[1]
-		}
-
-		s = append(s, Column{name, sqlType})
-	}
-	return s
-}
-
-// Convert polymorphic "Parameter" type
-// into interface{} type, suitable for variadic expansion
-// in db.Exec(statement, params...)
-func ParameterInterface(p *signal.SqlStatement_SqlParameter, sqlType string) interface{} {
+func ParameterValue(p *signal.SqlStatement_SqlParameter) interface{} {
 	if p.StringParameter != nil {
 		return p.StringParameter
 	} else if p.IntegerParameter != nil {
@@ -128,27 +71,11 @@ func ParameterInterface(p *signal.SqlStatement_SqlParameter, sqlType string) int
 		return *p.DoubleParameter
 	} else if p.BlobParameter != nil {
 		return p.BlobParameter
-	// } else if p.NullParameter != nil {
-		// switch sqlType {
-		// case "TEXT":
-			// return ""
-		// case "INTEGER":
-			// return 0
-		// case "REAL":
-			// return 0.0
-		// case "BLOB":
-			// return nil
-		// case "<none>":
-			// return nil
-		// default:	
-			// log.Printf("UNKNOWN TYPE %v", sqlType)
-		// }
 	}
 	return nil
 }
 
-func WriteDatabase(bf *types.BackupFile, db *sql.DB, filter string) error {
-	affinity := make(map[string][]Column)
+func WriteDatabase(bf *types.BackupFile, db *sql.DB) error {
 	section := make(map[string]bool)
 
 	fns := types.ConsumeFuncs{
@@ -156,67 +83,35 @@ func WriteDatabase(bf *types.BackupFile, db *sql.DB, filter string) error {
 			stmt := *s.Statement
 			param := make([]interface{}, len(s.Parameters))
 
-			// Log each new section to give a sense of progress
-			a := strings.SplitN(stmt, " ", 4)
-			if false {
-				if len(a) >= 3 {
-					key := strings.Join(a[:3], " ")
-					if _, found := section[key]; !found {
-						section[key] = true
-						log.Println(stmt)
-					}
-				} else {
-					log.Println(stmt)
-				}
-			}
-
 			if strings.HasPrefix(stmt, "CREATE TABLE ") {
+				a := strings.SplitN(stmt, " ", 4)
 				table := unwrap(a[2], `""`)
 				if strings.HasPrefix(table, "sqlite_") {
 					log.Printf("*** Skipping RESERVED table name %s", table)
 					return nil
 				}
 
-				cols := a[3]
-				affinity[table] = schema(cols)
-				// log.Printf("schema [%s] = %v", table, affinity[table])
-
 			} else if strings.HasPrefix(stmt, "INSERT INTO ") {
+				// Log each new section to give a sense of progress
+				a := strings.SplitN(stmt, " ", 4)
 				table := unwrap(a[2], `""`)
-				col := affinity[table]
-				if len(col) < len(param) {
-					msg := "More parameters than declared types in '%s'\n%v\n%v"
-					return errors.New(fmt.Sprintf(msg, table, col, s.Parameters))
+				if _, found := section[table]; !found {
+					section[table] = true
+					log.Printf("Populating table %s ...", table)
 				}
-				for i, v := range s.Parameters {
-					param[i] = ParameterInterface(v, col[i].Type)
-				}
-				// log.Printf("\nschema: %v\nparams: %v\n\n", col, param)
 
-				// return nil
-			//DEBUG allow list
-			} else if strings.HasPrefix(stmt, "CREATE VIRTUAL TABLE ") {
-				// return nil
-			} else if strings.HasPrefix(stmt, "CREATE INDEX ") {
-				// return nil
-			} else if strings.HasPrefix(stmt, "CREATE UNIQUE INDEX ") {
-				// return nil
-			} else if strings.HasPrefix(stmt, "CREATE TRIGGER ") {
-				// return nil
-			} else {
-				if len(s.Parameters) > 0 {
-					return errors.New(fmt.Sprintf("Unexpected parameters, not an INSERT statement: %v", s.Parameters))
+				// db.Exec cannot know which member of Parameter struct to use
+				// so we convert from a uniform array of polymorphic struct
+				// into a generic array of concrete types
+				for i, v := range s.Parameters {
+					param[i] = ParameterValue(v)
 				}
-				//DEBUG block list
-				// log.Printf("Skipping: %v\n", stmt)
-				// return nil
 			}
 
 			_, err := db.Exec(stmt, param...)
 			if err != nil {
 				detail := fmt.Sprintf("%s\n%v\nSQL Exec", stmt, param)
 				return errors.Wrap(err, detail)
-				// return errors.Wrap(err, "SQL Exec")
 			}
 			return nil
 		},

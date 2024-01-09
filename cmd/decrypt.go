@@ -26,6 +26,10 @@ var Decrypt = cli.Command{
 			Usage: "write decrypted database to `FILE`",
 			Value: "backup.db",
 		},
+		&cli.StringFlag{
+			Name:  "filter",
+			Usage: "debug filter",
+		},
 	}, coreFlags...),
 	Action: func(c *cli.Context) error {
 		bf, err := setup(c)
@@ -48,7 +52,12 @@ var Decrypt = cli.Command{
 			db.Close()
 		}()
 
-		return WriteDatabase(bf, db)
+		// bf.Counter = 0
+		// db.Exec("CREATE TABLE roster (_id INTEGER PRIMARY KEY, age INTEGER, name TEXT)")
+		// db.Exec("INSERT INTO roster VALUES (?,?,?)", 42, 29, "Doe")
+		// return nil
+
+		return WriteDatabase(bf, db, c.String("filter"))
 	},
 }
 
@@ -114,31 +123,31 @@ func ParameterInterface(p *signal.SqlStatement_SqlParameter, sqlType string) int
 		return p.StringParameter
 	} else if p.IntegerParameter != nil {
 		signed := int64(*p.IntegerParameter)
-		return &signed
+		return signed
 	} else if p.DoubleParameter != nil {
-		return p.DoubleParameter
+		return *p.DoubleParameter
 	} else if p.BlobParameter != nil {
 		return p.BlobParameter
-	} else if p.NullParameter != nil {
-		switch sqlType {
-		case "TEXT":
-			return p.StringParameter
-		case "INTEGER":
-			return p.IntegerParameter
-		case "REAL":
-			return p.DoubleParameter
-		case "BLOB":
-			return p.BlobParameter
-		case "<none>":
-			return nil
-		default:	
-			log.Printf("UNKNOWN TYPE %v", sqlType)
-		}
+	// } else if p.NullParameter != nil {
+		// switch sqlType {
+		// case "TEXT":
+			// return ""
+		// case "INTEGER":
+			// return 0
+		// case "REAL":
+			// return 0.0
+		// case "BLOB":
+			// return nil
+		// case "<none>":
+			// return nil
+		// default:	
+			// log.Printf("UNKNOWN TYPE %v", sqlType)
+		// }
 	}
 	return nil
 }
 
-func WriteDatabase(bf *types.BackupFile, db *sql.DB) error {
+func WriteDatabase(bf *types.BackupFile, db *sql.DB, filter string) error {
 	affinity := make(map[string][]Column)
 	section := make(map[string]bool)
 
@@ -149,14 +158,16 @@ func WriteDatabase(bf *types.BackupFile, db *sql.DB) error {
 
 			// Log each new section to give a sense of progress
 			a := strings.SplitN(stmt, " ", 4)
-			if len(a) >= 3 {
-				key := strings.Join(a[:3], " ")
-				if _, found := section[key]; !found {
-					section[key] = true
+			if false {
+				if len(a) >= 3 {
+					key := strings.Join(a[:3], " ")
+					if _, found := section[key]; !found {
+						section[key] = true
+						log.Println(stmt)
+					}
+				} else {
 					log.Println(stmt)
 				}
-			} else {
-				log.Println(stmt)
 			}
 
 			if strings.HasPrefix(stmt, "CREATE TABLE ") {
@@ -168,6 +179,7 @@ func WriteDatabase(bf *types.BackupFile, db *sql.DB) error {
 
 				cols := a[3]
 				affinity[table] = schema(cols)
+				// log.Printf("schema [%s] = %v", table, affinity[table])
 
 			} else if strings.HasPrefix(stmt, "INSERT INTO ") {
 				table := unwrap(a[2], `""`)
@@ -179,16 +191,32 @@ func WriteDatabase(bf *types.BackupFile, db *sql.DB) error {
 				for i, v := range s.Parameters {
 					param[i] = ParameterInterface(v, col[i].Type)
 				}
+				// log.Printf("\nschema: %v\nparams: %v\n\n", col, param)
 
+				// return nil
+			//DEBUG allow list
+			} else if strings.HasPrefix(stmt, "CREATE VIRTUAL TABLE ") {
+				// return nil
+			} else if strings.HasPrefix(stmt, "CREATE INDEX ") {
+				// return nil
+			} else if strings.HasPrefix(stmt, "CREATE UNIQUE INDEX ") {
+				// return nil
+			} else if strings.HasPrefix(stmt, "CREATE TRIGGER ") {
+				// return nil
 			} else {
 				if len(s.Parameters) > 0 {
 					return errors.New(fmt.Sprintf("Unexpected parameters, not an INSERT statement: %v", s.Parameters))
 				}
+				//DEBUG block list
+				// log.Printf("Skipping: %v\n", stmt)
+				// return nil
 			}
 
 			_, err := db.Exec(stmt, param...)
 			if err != nil {
-				return errors.Wrap(err, "SQL Exec")
+				detail := fmt.Sprintf("%s\n%v\nSQL Exec", stmt, param)
+				return errors.Wrap(err, detail)
+				// return errors.Wrap(err, "SQL Exec")
 			}
 			return nil
 		},

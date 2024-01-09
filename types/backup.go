@@ -154,6 +154,14 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 	uint32ToBytes(bf.IV, bf.Counter)
 	bf.Counter++
 
+	if out == nil {
+		_, err := bf.file.Seek(int64(length + 10), 1)
+		if err != nil {
+			return errors.Wrap(err, "failed to seek over attachment data")
+		}
+		return nil
+	}
+
 	aesCipher, err := aes.NewCipher(bf.CipherKey)
 	if err != nil {
 		return errors.New("Bad cipher")
@@ -210,13 +218,13 @@ type ConsumeFuncs struct {
 func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
 	return ConsumeFuncs{
 		AttachmentFunc: func(a *signal.Attachment) error {
-			return bf.DecryptAttachment(a.GetLength(), ioutil.Discard)
+			return bf.DecryptAttachment(a.GetLength(), nil)
 		},
 		AvatarFunc: func(a *signal.Avatar) error {
-			return bf.DecryptAttachment(a.GetLength(), ioutil.Discard)
+			return bf.DecryptAttachment(a.GetLength(), nil)
 		},
 		StickerFunc: func(a *signal.Sticker) error {
-			return bf.DecryptAttachment(a.GetLength(), ioutil.Discard)
+			return bf.DecryptAttachment(a.GetLength(), nil)
 		},
 		StatementFunc: func(s *signal.SqlStatement) error {
 			return nil

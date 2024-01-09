@@ -86,11 +86,13 @@ func schema(statement_params string) []Column {
 		// ignore parts[3...], optional tags like "DEFAULT" or "PRIMARY"
 
 		name := parts[0]
-		if inParen && strings.Index(name, ")") != -1 {
-			inParen = false
-			continue
-		} else if strings.Index(name, "(") != -1 {
+		if strings.Index(name, "(") != -1 {
 			inParen = true
+		}
+		if inParen {
+			if strings.Index(name, ")") != -1 {
+				inParen = false
+			}
 			continue
 		}
 

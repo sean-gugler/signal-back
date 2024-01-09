@@ -123,7 +123,7 @@ func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 
 	if !hmac.Equal(theirMac, ourMac) {
 		// log.Printf("MAC expect %s found %s", hex.EncodeToString(ourMac), hex.EncodeToString(theirMac))
-		return 0, nil, errors.New("Decryption error, wrong key")
+		return 0, nil, errors.New("Decryption error, wrong password")
 	}
 
 	uint32ToBytes(bf.IV, bf.Counter)
@@ -200,7 +200,7 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 
 	if !hmac.Equal(theirMac, ourMac) {
 		// log.Printf("MAC expect %s found %s", hex.EncodeToString(ourMac), hex.EncodeToString(theirMac))
-		return errors.New("Decryption error, wrong key")
+		return errors.New("Decryption error, wrong password")
 	}
 
 	return nil

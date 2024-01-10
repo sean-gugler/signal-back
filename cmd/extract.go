@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -12,19 +13,21 @@ import (
 	"github.com/urfave/cli"
 	"github.com/xeals/signal-back/signal"
 	"github.com/xeals/signal-back/types"
+	_ "modernc.org/sqlite"
 )
+
+var filenameDB = "signal.db"
 
 // Extract fulfils the `extract` subcommand.
 var Extract = cli.Command{
 	Name:               "extract",
-	Usage:              "Retrieve attachments from the backup",
-	UsageText:          "Decrypt files embedded in the backup.",
+	Usage:              "Decrypt contents into individual files",
+	UsageText:          "Decrypt the backup and extract all files inside it.",
 	CustomHelpTemplate: SubcommandHelp,
 	Flags: append([]cli.Flag{
 		&cli.StringFlag{
 			Name:  "outdir, o",
-			Usage: "output attachments to `DIRECTORY`",
-			Value: "attachments",
+			Usage: "output files to `DIRECTORY` (default current directory)",
 		},
 	}, coreFlags...),
 	Action: func(c *cli.Context) error {
@@ -43,18 +46,32 @@ var Extract = cli.Command{
 				return errors.Wrap(err, "unable to change working directory")
 			}
 		}
-		if err = ExtractAttachments(bf); err != nil {
+		if err = ExtractFiles(bf); err != nil {
 			return errors.Wrap(err, "failed to extract attachment")
 		}
 
 		return nil
 	},
 }
+ 
+func createDB (fileName string) (db *sql.DB, err error) {
+	log.Printf("Begin decrypt into %s", fileName)
 
-// ExtractAttachments pulls only the attachments out of the backup file and
-// outputs them in the current working directory.
-func ExtractAttachments(bf *types.BackupFile) error {
-	aEncs := make(map[uint64]string)
+	if err := os.Remove(fileName); err != nil && !os.IsNotExist(err) {
+		return nil, errors.Wrap(err, "creating fresh database")
+	}
+
+	db, err = sql.Open("sqlite", fileName)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create database file")
+	}
+	
+	return db, nil
+}
+
+// ExtractFiles consumes all decrypted data from the backup file and
+// dispatches it to an appropriate location.
+func ExtractFiles(bf *types.BackupFile) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("Panicked during extraction:", r)
@@ -62,21 +79,65 @@ func ExtractAttachments(bf *types.BackupFile) error {
 	}()
 	defer bf.Close()
 
+	db, err := createDB (filenameDB)
+	if err != nil { return err }
+	defer db.Close()
+
+	section := make(map[string]bool)
+	aEncs := make(map[uint64]string)
+
 	fns := types.ConsumeFuncs{
 		StatementFunc: func(s *signal.SqlStatement) error {
 			stmt := s.GetStatement()
-			if strings.HasPrefix(stmt, "INSERT INTO part") {
-				ps := s.GetParameters()
-				id := *ps[19].IntegerParameter
-				mime := *ps[3].StringParameter
+			param := make([]interface{}, len(s.Parameters))
 
-				aEncs[id] = mime
-				log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
+			if strings.HasPrefix(stmt, "CREATE TABLE ") {
+				a := strings.SplitN(stmt, " ", 4)
+				table := unwrap(a[2], `""`)
+				if strings.HasPrefix(table, "sqlite_") {
+					log.Printf("*** Skipping RESERVED table name %s", table)
+					return nil
+				}
+
+			} else if strings.HasPrefix(stmt, "INSERT INTO ") {
+				a := strings.SplitN(stmt, " ", 4)
+				table := unwrap(a[2], `""`)
+
+				// Log each new section to give a sense of progress
+				if _, found := section[table]; !found {
+					section[table] = true
+					log.Printf("Populating table `%s` ...", table)
+				}
+
+				if table == "part" {
+					ps := s.GetParameters()
+					id := *ps[19].IntegerParameter
+					size := *ps[15].IntegerParameter
+					name := ps[16].StringParameter
+					mime := *ps[3].StringParameter
+
+					aEncs[id] = mime
+					// log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
+				}
+
+				// db.Exec cannot know which member of Parameter struct to use
+				// so we convert from a uniform array of polymorphic struct
+				// into a generic array of concrete types
+				for i, v := range s.Parameters {
+					param[i] = ParameterValue(v)
+				}
 			}
+
+			_, err := db.Exec(stmt, param...)
+			if err != nil {
+				detail := fmt.Sprintf("%s\n%v\nSQL Exec", stmt, param)
+				return errors.Wrap(err, detail)
+			}
+
 			return nil
 		},
 		AttachmentFunc: func(a *signal.Attachment) error {
-			log.Printf("found attachment binary %v\n", *a.AttachmentId)
+			// log.Printf("found attachment binary %v\n", *a.AttachmentId)
 			id := *a.AttachmentId
 
 			// Report any issues with declared type

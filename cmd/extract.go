@@ -69,6 +69,20 @@ func createDB (fileName string) (db *sql.DB, err error) {
 	return db, nil
 }
 
+func ParameterValue(p *signal.SqlStatement_SqlParameter) interface{} {
+	if p.StringParameter != nil {
+		return p.StringParameter
+	} else if p.IntegerParameter != nil {
+		signed := int64(*p.IntegerParameter)
+		return signed
+	} else if p.DoubleParameter != nil {
+		return *p.DoubleParameter
+	} else if p.BlobParameter != nil {
+		return p.BlobParameter
+	}
+	return nil
+}
+
 // ExtractFiles consumes all decrypted data from the backup file and
 // dispatches it to an appropriate location.
 func ExtractFiles(bf *types.BackupFile) error {
@@ -112,8 +126,8 @@ func ExtractFiles(bf *types.BackupFile) error {
 				if table == "part" {
 					ps := s.GetParameters()
 					id := *ps[19].IntegerParameter
-					size := *ps[15].IntegerParameter
-					name := ps[16].StringParameter
+					// size := *ps[15].IntegerParameter
+					// name := ps[16].StringParameter
 					mime := *ps[3].StringParameter
 
 					aEncs[id] = mime

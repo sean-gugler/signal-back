@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	// "io/ioutil"
+	"log"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -25,10 +28,11 @@ var Analyse = cli.Command{
 		}
 
 		a, err := AnalyseTables(bf)
-		fmt.Println("This is still largely in flux and reflects whatever task I was having issues with at the time.\n")
-		fmt.Println(a)
+		for key, count := range a {
+			fmt.Printf("%v: %v\n", key, count)
+		}
 
-		fmt.Println("part:", len(examples["insert_into_part"].GetParameters()), examples["insert_into_part"])
+		// fmt.Println("\nexample part:", len(examples["stmt_insert_into_part"].GetParameters()), examples["stmt_insert_into_part"])
 
 		return errors.WithMessage(err, "failed to analyse tables")
 	},
@@ -36,76 +40,114 @@ var Analyse = cli.Command{
 
 var examples = map[string]*signal.SqlStatement{}
 
+// Remove delimiters such as () or "" that may wrap a substring
+func unwrap(s string, delim string) string {
+	if len(s) > 2 && s[0] == delim[0] && s[len(s)-1] == delim[1] {
+		return s[1:len(s)-1]
+	} else {
+		return s
+	}
+}
+
 // AnalyseTables calculates the frequency of all records in the backup file.
 func AnalyseTables(bf *types.BackupFile) (map[string]int, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("Panicked during extraction:", r)
+		}
+	}()
+	defer bf.Close()
+
 	counts := make(map[string]int)
+	statementTypes := make(map[string]string)
+	var data_sink io.Writer
 
-	frames, err := bf.Slurp()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to slurp frames")
+	for _, caps := range []string{
+		"CREATE TABLE ",
+		"CREATE VIRTUAL TABLE ",
+		"CREATE INDEX ",
+		"CREATE UNIQUE INDEX ",
+		"CREATE TRIGGER ",
+		"DROP TABLE",
+		"DROP INDEX",
+		// "INSERT INTO ",
+	} {
+		key := strings.ToLower(caps)
+		key = strings.ReplaceAll(key, " ", "_")
+		key = "stmt_" + key
+		key = key[:len(key)-1]
+		statementTypes[caps] = key
 	}
-	for _, f := range frames {
-		if f.GetHeader() != nil {
-			counts["header"]++
-			continue
-		}
-		if f.GetVersion() != nil {
-			counts["version"]++
-			continue
-		}
-		if f.GetAttachment() != nil {
-			counts["attachment"]++
-			continue
-		}
-		if f.GetAvatar() != nil {
-			counts["avatar"]++
-			continue
-		}
-		if f.GetPreference() != nil {
-			counts["pref"]++
-			continue
-		}
-		if stmt := f.GetStatement(); stmt != nil {
-			if strings.HasPrefix(*stmt.Statement, "DROP TABLE") {
-				if counts["drop_table"] == 0 {
-					examples["drop_table"] = stmt
-				}
-				counts["drop_table"]++
-				continue
-			}
-			if strings.HasPrefix(*stmt.Statement, "CREATE TABLE") {
-				if counts["create_table"] == 0 {
-					examples["create_table"] = stmt
-				}
-				counts["create_table"]++
-				continue
-			}
-			if strings.HasPrefix(*stmt.Statement, "DROP INDEX") {
-				if counts["drop_index"] == 0 {
-					examples["drop_index"] = stmt
-				}
-				counts["drop_index"]++
-				continue
-			}
-			if strings.HasPrefix(*stmt.Statement, "CREATE INDEX") ||
-				strings.HasPrefix(*stmt.Statement, "CREATE UNIQUE INDEX") {
-				if counts["create_index"] == 0 {
-					examples["create_index"] = stmt
-				}
-				counts["create_index"]++
-				continue
-			}
-			if strings.HasPrefix(*stmt.Statement, "INSERT INTO") {
-				table := strings.Split(*stmt.Statement, " ")[2]
-				if counts["insert_into_"+table] == 0 {
-					examples["insert_into_"+table] = stmt
-				}
-				counts["insert_into_"+table]++
-				continue
-			}
 
-			counts["other_stmt"]++
-		}
+	fns := types.ConsumeFuncs{
+		FrameFunc:      func(f *signal.BackupFrame) error {
+			if f.GetHeader() != nil {
+				counts["header"]++
+			}
+			if f.GetVersion() != nil {
+				counts["version"]++
+			}
+			if f.GetPreference() != nil {
+				counts["pref"]++
+			}
+			if f.GetKeyValue() != nil {
+				counts["keyvalue"]++
+			}
+			if f.GetAttachment() != nil {
+				counts["attachment"]++
+			}
+			if f.GetAvatar() != nil {
+				counts["avatar"]++
+			}
+			if f.GetSticker() != nil {
+				counts["sticker"]++
+			}
+			if f.End != nil {
+				counts["end"]++
+			}
+			return nil
+		},
+		AttachmentFunc: func(a *signal.Attachment) error {
+			n := a.GetLength()
+			counts["bytes_attachment"] += int(n)
+			return bf.DecryptAttachment(n, data_sink)
+		},
+		AvatarFunc:     func(a *signal.Avatar) error {
+			n := a.GetLength()
+			counts["bytes_avatar"] += int(n)
+			return bf.DecryptAttachment(n, data_sink)
+		},
+		StickerFunc:    func(s *signal.Sticker) error {
+			n := s.GetLength()
+			counts["bytes_sticker"] += int(n)
+			return bf.DecryptAttachment(n, data_sink)
+		},
+		StatementFunc:  func(s *signal.SqlStatement) error {
+			stmt := s.GetStatement()
+			found := false
+			for prefix, key := range statementTypes {
+				if strings.HasPrefix(stmt, prefix) {
+					examples[key] = s
+					counts[key]++
+					found = true
+				}
+			}
+			if !found && strings.HasPrefix(stmt, "INSERT INTO") {
+				table := strings.Split(stmt, " ")[2]
+				key := "stmt_insert_into_" + table
+				examples[key] = s
+				counts[key]++
+				found = true
+			}
+			if !found {
+				counts["stmt_other"]++
+			}
+			return nil
+		},
+	}
+
+	if err := bf.Consume(fns); err != nil {
+		return nil, err
 	}
 
 	return counts, nil

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	// "log"
@@ -208,6 +207,7 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 
 // ConsumeFuncs stores parameters for a Consume operation.
 type ConsumeFuncs struct {
+	FrameFunc      func(*signal.BackupFrame) error
 	AttachmentFunc func(*signal.Attachment) error
 	AvatarFunc     func(*signal.Avatar) error
 	StickerFunc    func(*signal.Sticker) error
@@ -294,6 +294,12 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 			return errors.Wrap(err, "consume [debug]")
 		}
 
+		if fn := fns.FrameFunc; fn != nil {
+			if err = fn(f); err != nil {
+				return errors.Wrap(err, "consume [frame]")
+			}
+		}
+
 		if a := f.GetAttachment(); a != nil {
 			if err = fns.AttachmentFunc(a); err != nil {
 				return errors.Wrap(err, "consume [attachment]")
@@ -317,42 +323,6 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 	}
 
 	return nil
-}
-
-// Slurp consumes the entire BackupFile and returns a list of all frames
-// contained in the file. Note that after calling this function, the underlying
-// file buffer will be empty and the file should be considered dropped. Calling
-// any function on the backup file after calling Slurp will fail.
-//
-// Note that any attachments in the backup file will not be handled.
-//
-// Closes the underlying file handler afterwards. The backup file should be considered exhausted.
-func (bf *BackupFile) Slurp() ([]*signal.BackupFrame, error) {
-	frames := []*signal.BackupFrame{}
-	defer bf.Close()
-
-	for {
-		_, f, err := bf.Frame()
-		if err == io.EOF {
-			return frames, nil
-		} else if err != nil {
-			return nil, err
-		}
-
-		frames = append(frames, f)
-
-		// Remove images
-		if a := f.GetAttachment(); a != nil {
-			if err = bf.DecryptAttachment(a.GetLength(), ioutil.Discard); err != nil {
-				return nil, errors.Wrap(err, "failed to remove attachment")
-			}
-		}
-		if a := f.GetAvatar(); a != nil {
-			if err = bf.DecryptAttachment(a.GetLength(), ioutil.Discard); err != nil {
-				return nil, errors.Wrap(err, "failed to remove avatar")
-			}
-		}
-	}
 }
 
 func (bf *BackupFile) Close() error {

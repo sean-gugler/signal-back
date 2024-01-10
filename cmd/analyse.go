@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
-	// "io/ioutil"
+	"io/ioutil"
 	"log"
 	"strings"
 
@@ -17,7 +17,7 @@ import (
 var Analyse = cli.Command{
 	Name:               "analyse",
 	Usage:              "Information about the backup file",
-	UsageText:          "Perform integrity check and password validation on the file. Optionally display statistical information.",
+	UsageText:          "Perform integrity check and password validation on the entire file. Optionally display statistical information.",
 	Aliases:            []string{"analyze"},
 	CustomHelpTemplate: SubcommandHelp,
 	Flags: append([]cli.Flag{
@@ -80,7 +80,7 @@ func AnalyseFile(bf *types.BackupFile, c *cli.Context) (map[string]int, error) {
 
 	counts := make(map[string]int)
 	statementTypes := make(map[string]string)
-	var data_sink io.Writer
+	var data_sink io.Writer = ioutil.Discard
 
 	for _, caps := range []string{
 		"CREATE TABLE ",

@@ -23,7 +23,6 @@ func main() {
 		cmd.Format,
 		cmd.Analyse,
 		cmd.Extract,
-		cmd.Check,
 	}
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{

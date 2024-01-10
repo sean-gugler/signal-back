@@ -154,7 +154,7 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 	bf.Counter++
 
 	if out == nil {
-		_, err := bf.file.Seek(int64(length + 10), 1)
+		_, err := bf.file.Seek(int64(length + 10), io.SeekCurrent)
 		if err != nil {
 			return errors.Wrap(err, "failed to seek over attachment data")
 		}

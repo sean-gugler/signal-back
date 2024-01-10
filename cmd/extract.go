@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/h2non/filetype"
@@ -17,6 +18,9 @@ import (
 )
 
 var filenameDB = "signal.db"
+var folderAttachment = "Attachments"
+var folderAvatar = "Avatars"
+var folderSticker = "Stickers"
 
 // Extract fulfils the `extract` subcommand.
 var Extract = cli.Command{
@@ -36,17 +40,26 @@ var Extract = cli.Command{
 			return err
 		}
 
-		if path := c.String("outdir"); path != "" {
-			err := os.MkdirAll(path, 0755)
-			if err != nil {
+		basePath := c.String("outdir")
+
+		if basePath != "" {
+			if err := os.MkdirAll(basePath, 0755); err != nil {
 				return errors.Wrap(err, "unable to create output directory")
 			}
-			err = os.Chdir(path)
-			if err != nil {
-				return errors.Wrap(err, "unable to change working directory")
+			if err := os.Mkdir(path.Join(basePath, folderAttachment), 0755); err != nil {
+				return errors.Wrap(err, "unable to create attachment directory")
 			}
+			if err := os.Mkdir(path.Join(basePath, folderAvatar), 0755); err != nil {
+				return errors.Wrap(err, "unable to create avatar directory")
+			}
+			if err := os.Mkdir(path.Join(basePath, folderSticker), 0755); err != nil {
+				return errors.Wrap(err, "unable to create sticker directory")
+			}
+			// if err = os.Chdir(path); err != nil {
+				// return errors.Wrap(err, "unable to change working directory")
+			// }
 		}
-		if err = ExtractFiles(bf); err != nil {
+		if err = ExtractFiles(bf, basePath); err != nil {
 			return errors.Wrap(err, "failed to extract attachment")
 		}
 
@@ -85,7 +98,7 @@ func ParameterValue(p *signal.SqlStatement_SqlParameter) interface{} {
 
 // ExtractFiles consumes all decrypted data from the backup file and
 // dispatches it to an appropriate location.
-func ExtractFiles(bf *types.BackupFile) error {
+func ExtractFiles(bf *types.BackupFile, base string) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("Panicked during extraction:", r)
@@ -93,7 +106,7 @@ func ExtractFiles(bf *types.BackupFile) error {
 	}()
 	defer bf.Close()
 
-	db, err := createDB (filenameDB)
+	db, err := createDB (path.Join(base, filenameDB))
 	if err != nil { return err }
 	defer db.Close()
 
@@ -154,18 +167,10 @@ func ExtractFiles(bf *types.BackupFile) error {
 			// log.Printf("found attachment binary %v\n", *a.AttachmentId)
 			id := *a.AttachmentId
 
-			// Report any issues with declared type
-			mime, hasMime := aEncs[id]
-			mimeExt, hasExt := GetExtension(mime)
-			if !hasMime {
-				log.Printf("file `%v` has no associated SQL entry, no declared MIME type", id)
-			} else if !hasExt {
-				log.Printf("mime type `%s` not recognised\n", mime)
-			}
-
 			// Write the file without extension, will rename later
 			fileName := fmt.Sprintf("%v", id)
-			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+			pathName := path.Join(base, folderAttachment, fileName)
+			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
 			if err != nil {
 				return errors.Wrap(err, "failed to open output file")
@@ -177,8 +182,17 @@ func ExtractFiles(bf *types.BackupFile) error {
 				return errors.Wrap(err, "failed to close output file")
 			}
 
+			// Report any issues with declared type
+			mime, hasMime := aEncs[id]
+			mimeExt, hasExt := GetExtension(mime)
+			if !hasMime {
+				log.Printf("file `%v` has no associated SQL entry, no declared MIME type", id)
+			} else if !hasExt {
+				log.Printf("mime type `%s` not recognised\n", mime)
+			}
+
 			// Look into the file header itself to detect proper extension.
-			kind, err := filetype.MatchFile(fileName)
+			kind, err := filetype.MatchFile(pathName)
 			if err != nil {
 				log.Println(err.Error())
 			}
@@ -192,7 +206,7 @@ func ExtractFiles(bf *types.BackupFile) error {
 					ext = mimeExt
 				} else {
 					log.Println("*** Please create a PR or issue if you think it have should been.")
-					log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", fileName)
+					log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
 				}
 			} else {
 				if hasMime && hasExt && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
@@ -203,10 +217,80 @@ func ExtractFiles(bf *types.BackupFile) error {
 
 			// Rename the file with proper extension
 			if ext != "" { 
-				if err = os.Rename(fileName, fileName+"."+ext); err != nil {
+				if err = os.Rename(pathName, pathName+"."+ext); err != nil {
 					return errors.Wrap(err, "unable to rename output file")
 				}
 			}
+			return nil
+		},
+		AvatarFunc: func(a *signal.Avatar) error {
+			id := *a.RecipientId
+
+			// Write the file without extension, will rename later
+			fileName := fmt.Sprintf("%v", id)
+			pathName := path.Join(base, folderAvatar, fileName)
+			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+
+			if err != nil {
+				return errors.Wrap(err, "failed to open output file")
+			}
+			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
+				return errors.Wrap(err, "failed to decrypt avatar")
+			}
+			if err = file.Close(); err != nil {
+				return errors.Wrap(err, "failed to close output file")
+			}
+
+			// Look into the file header itself to detect proper extension.
+			kind, err := filetype.MatchFile(pathName)
+			if err != nil {
+				log.Println(err.Error())
+			}
+			if kind == filetype.Unknown {
+				log.Printf("unable to detect file type of %v", pathName)
+			} else {
+				// Rename the file with proper extension
+				ext := kind.Extension
+				if err = os.Rename(pathName, pathName+"."+ext); err != nil {
+					return errors.Wrap(err, "unable to rename output file")
+				}
+			}
+
+			return nil
+		},
+		StickerFunc: func(a *signal.Sticker) error {
+			id := *a.RowId
+
+			// Write the file without extension, will rename later
+			fileName := fmt.Sprintf("%v", id)
+			pathName := path.Join(base, folderSticker, fileName)
+			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+
+			if err != nil {
+				return errors.Wrap(err, "failed to open output file")
+			}
+			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
+				return errors.Wrap(err, "failed to decrypt sticker")
+			}
+			if err = file.Close(); err != nil {
+				return errors.Wrap(err, "failed to close output file")
+			}
+
+			// Look into the file header itself to detect proper extension.
+			kind, err := filetype.MatchFile(pathName)
+			if err != nil {
+				log.Println(err.Error())
+			}
+			if kind == filetype.Unknown {
+				log.Printf("unable to detect file type of %v", pathName)
+			} else {
+				// Rename the file with proper extension
+				ext := kind.Extension
+				if err = os.Rename(pathName, pathName+"."+ext); err != nil {
+					return errors.Wrap(err, "unable to rename output file")
+				}
+			}
+
 			return nil
 		},
 	}

@@ -207,7 +207,7 @@ func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 
 // ConsumeFuncs stores parameters for a Consume operation.
 type ConsumeFuncs struct {
-	FrameFunc      func(*signal.BackupFrame) error
+	FrameFunc      func(*signal.BackupFrame, int64, uint32) error
 	AttachmentFunc func(*signal.Attachment) error
 	AvatarFunc     func(*signal.Avatar) error
 	StickerFunc    func(*signal.Sticker) error
@@ -295,7 +295,7 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 		}
 
 		if fn := fns.FrameFunc; fn != nil {
-			if err = fn(f); err != nil {
+			if err = fn(f, pos, frame_length); err != nil {
 				return errors.Wrap(err, "consume [frame]")
 			}
 		}

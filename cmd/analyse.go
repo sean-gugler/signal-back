@@ -17,24 +17,44 @@ import (
 var Analyse = cli.Command{
 	Name:               "analyse",
 	Usage:              "Information about the backup file",
-	UsageText:          "Display statistical information about the backup file.",
+	UsageText:          "Perform integrity check and password validation on the file. Optionally display statistical information.",
 	Aliases:            []string{"analyze"},
 	CustomHelpTemplate: SubcommandHelp,
-	Flags:              coreFlags,
+	Flags: append([]cli.Flag{
+		&cli.BoolFlag{
+			Name:  "summary, s",
+			Usage: "Count each type of frame in the file",
+		},
+		&cli.BoolFlag{
+			Name:  "frames, f",
+			Usage: "Report header info for every frame",
+		},
+		&cli.BoolFlag{
+			Name:  "body, b",
+			Usage: "Show frame body for every frame (very verbose!)",
+		},
+	}, coreFlags...),
 	Action: func(c *cli.Context) error {
 		bf, err := setup(c)
 		if err != nil {
 			return err
 		}
 
-		a, err := AnalyseTables(bf)
-		for key, count := range a {
-			fmt.Printf("%v: %v\n", key, count)
+		a, err := AnalyseFile(bf, c)
+		if err != nil {
+			return errors.WithMessage(err, "failed to analyse file")
+		}
+		fmt.Println("Password valid, file OK")
+
+		if c.Bool("summary") {
+			for key, count := range a {
+				fmt.Printf("%v: %v\n", key, count)
+			}
 		}
 
-		// fmt.Println("\nexample part:", len(examples["stmt_insert_into_part"].GetParameters()), examples["stmt_insert_into_part"])
+		log.Println("\nexample part:", len(examples["stmt_insert_into_part"].GetParameters()), examples["stmt_insert_into_part"])
 
-		return errors.WithMessage(err, "failed to analyse tables")
+		return nil
 	},
 }
 
@@ -49,8 +69,8 @@ func unwrap(s string, delim string) string {
 	}
 }
 
-// AnalyseTables calculates the frequency of all records in the backup file.
-func AnalyseTables(bf *types.BackupFile) (map[string]int, error) {
+// AnalyseFile tabulates the frequency of all records in the backup file.
+func AnalyseFile(bf *types.BackupFile, c *cli.Context) (map[string]int, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("Panicked during extraction:", r)
@@ -79,32 +99,72 @@ func AnalyseTables(bf *types.BackupFile) (map[string]int, error) {
 		statementTypes[caps] = key
 	}
 
+	if c.Bool("frames") || c.Bool("body") {
+		desc := fmt.Sprintf("%012X: FRAME %d header:<iv:%x, salt:%x>", 0, 0, bf.IV, bf.Salt)
+		fmt.Println(desc)
+	}
+
+	ended := 0
+	frame_number := 1
+
 	fns := types.ConsumeFuncs{
-		FrameFunc:      func(f *signal.BackupFrame) error {
+		FrameFunc:      func(f *signal.BackupFrame, pos int64, frame_length uint32) error {
+			if ended == 1 {
+				fmt.Println("*** Warning: more frames found after 'end' frame")
+				ended++
+			}
+			desc := fmt.Sprintf("%012X: FRAME %d length %d", pos, frame_number, frame_length)
+
 			if f.GetHeader() != nil {
+				hdr := f.GetHeader()
+				desc += fmt.Sprintf(" header:<iv:%x, salt:%x>", hdr.GetIv(), hdr.GetSalt())
 				counts["header"]++
 			}
 			if f.GetVersion() != nil {
+				desc += fmt.Sprintf(" version:%d", f.GetVersion().GetVersion())
 				counts["version"]++
 			}
+			if f.GetStatement() != nil {
+				stmt := f.GetStatement().GetStatement()
+				desc += fmt.Sprintf(" stmt:%v", strings.Split(stmt, " ")[0:3])
+				// counts["stmt"]++
+			}
 			if f.GetPreference() != nil {
+				desc += fmt.Sprintf(" pref[%s]", f.GetPreference().GetKey())
 				counts["pref"]++
 			}
 			if f.GetKeyValue() != nil {
+				desc += fmt.Sprintf(" keyvalue[%v]", f.GetKeyValue().GetKey())
 				counts["keyvalue"]++
 			}
 			if f.GetAttachment() != nil {
+				desc += fmt.Sprintf(" attachment[%d]", f.GetAttachment().GetLength())
 				counts["attachment"]++
 			}
 			if f.GetAvatar() != nil {
+				desc += fmt.Sprintf(" avatar[%d]", f.GetAvatar().GetLength())
 				counts["avatar"]++
 			}
 			if f.GetSticker() != nil {
+				desc += fmt.Sprintf(" sticker[%d]", f.GetSticker().GetLength())
 				counts["sticker"]++
 			}
 			if f.End != nil {
+				desc += fmt.Sprintf(" end[%v]", f.GetEnd())
 				counts["end"]++
+				if f.GetEnd() {
+					ended = 1
+				}
 			}
+
+			if c.Bool("frames") {
+				fmt.Println(desc)
+			}
+			if c.Bool("body") {
+				fmt.Printf("%v\n", f)
+			}
+			frame_number++
+
 			return nil
 		},
 		AttachmentFunc: func(a *signal.Attachment) error {

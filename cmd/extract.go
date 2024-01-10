@@ -181,8 +181,8 @@ func ExtractFiles(bf *types.BackupFile) error {
 					log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", fileName)
 				}
 			} else {
-				log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
 				if hasMime && hasExt && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
+					log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
 					log.Printf("mismatches declared type: %s (.%s)\n", mime, mimeExt)
 				}
 			}
@@ -197,7 +197,13 @@ func ExtractFiles(bf *types.BackupFile) error {
 		},
 	}
 
-	return bf.Consume(fns)
+	if err := bf.Consume(fns); err != nil {
+		return err
+	}
+
+	log.Println("Done!")
+
+	return nil
 }
 
 // No simple API like 'GetExtension(mime)' found in https://github.com/h2non/filetype
@@ -208,6 +214,7 @@ func GetExtension(mime string)(string, bool) {
 
 	filetype.Types.Range(func(k, v interface{}) bool {
 		kind := v.(filetype_types.Type)
+		//assert k == kind.Extension
 		if kind.MIME.Value == mime {
 			ext = kind.Extension
 			found = true

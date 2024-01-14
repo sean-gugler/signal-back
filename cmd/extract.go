@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/h2non/filetype"
 	filetype_types "github.com/h2non/filetype/types"
@@ -91,6 +92,7 @@ var Extract = cli.Command{
 type avatarInfo struct {
 	DisplayName *string
 	ProfileName *string
+	fetchTime   uint64
 }
  
 type stickerInfo struct {
@@ -195,6 +197,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 					avatars[id] = avatarInfo{
 						DisplayName:    ps[17].StringParameter,
 						ProfileName:    ps[22].StringParameter,
+						fetchTime:     *ps[38].IntegerParameter,
 					}
 
 				case "sticker":
@@ -332,6 +335,13 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			if err = os.Rename(pathName, newName); err != nil {
 				msg := fmt.Sprintf("unable to rename avatar file to: %s", newName)
 				return errors.Wrap(err, msg)
+			}
+			if info.fetchTime != 0 {
+				atime := time.UnixMilli(0) //leave unchanged
+				mtime := time.UnixMilli(int64(info.fetchTime))
+				if err = os.Chtimes(newName, atime, mtime); err != nil {
+					return errors.Wrap(err, "failed to change timestamp of avatar file")
+				}
 			}
 
 			return nil

@@ -33,6 +33,22 @@ var Extract = cli.Command{
 			Name:  "outdir, o",
 			Usage: "output files to `DIRECTORY` (default current directory)",
 		},
+		&cli.BoolFlag{
+			Name:  "attachments",
+			Usage: "Skip extracting attachments",
+		},
+		&cli.BoolFlag{
+			Name:  "avatars",
+			Usage: "Skip extracting avatars",
+		},
+		&cli.BoolFlag{
+			Name:  "stickers",
+			Usage: "Skip extracting stickers",
+		},
+		&cli.BoolFlag{
+			Name:  "database",
+			Usage: "Skip extracting database",
+		},
 	}, coreFlags...),
 	Action: func(c *cli.Context) error {
 		bf, err := setup(c)
@@ -46,20 +62,23 @@ var Extract = cli.Command{
 			if err := os.MkdirAll(basePath, 0755); err != nil {
 				return errors.Wrap(err, "unable to create output directory")
 			}
+		}
+		if !c.Bool("attachments") {
 			if err := os.Mkdir(path.Join(basePath, folderAttachment), 0755); err != nil {
 				return errors.Wrap(err, "unable to create attachment directory")
 			}
+		}
+		if !c.Bool("avatars") {
 			if err := os.Mkdir(path.Join(basePath, folderAvatar), 0755); err != nil {
 				return errors.Wrap(err, "unable to create avatar directory")
 			}
+		}
+		if !c.Bool("stickers") {
 			if err := os.Mkdir(path.Join(basePath, folderSticker), 0755); err != nil {
 				return errors.Wrap(err, "unable to create sticker directory")
 			}
-			// if err = os.Chdir(path); err != nil {
-				// return errors.Wrap(err, "unable to change working directory")
-			// }
 		}
-		if err = ExtractFiles(bf, basePath); err != nil {
+		if err = ExtractFiles(bf, c, basePath); err != nil {
 			return errors.Wrap(err, "failed to extract attachment")
 		}
 
@@ -98,7 +117,7 @@ func ParameterValue(p *signal.SqlStatement_SqlParameter) interface{} {
 
 // ExtractFiles consumes all decrypted data from the backup file and
 // dispatches it to an appropriate location.
-func ExtractFiles(bf *types.BackupFile, base string) error {
+func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("Panicked during extraction:", r)
@@ -106,9 +125,13 @@ func ExtractFiles(bf *types.BackupFile, base string) error {
 	}()
 	defer bf.Close()
 
-	db, err := createDB (path.Join(base, filenameDB))
-	if err != nil { return err }
-	defer db.Close()
+	var db *sql.DB
+	var err error
+	if !c.Bool("database") {
+		db, err = createDB (path.Join(base, filenameDB))
+		if err != nil { return err }
+		defer db.Close()
+	}
 
 	section := make(map[string]bool)
 	aEncs := make(map[uint64]string)
@@ -121,7 +144,7 @@ func ExtractFiles(bf *types.BackupFile, base string) error {
 			if strings.HasPrefix(stmt, "CREATE TABLE ") {
 				a := strings.SplitN(stmt, " ", 4)
 				table := unwrap(a[2], `""`)
-				if strings.HasPrefix(table, "sqlite_") {
+				if !c.Bool("database") && strings.HasPrefix(table, "sqlite_") {
 					log.Printf("*** Skipping RESERVED table name %s", table)
 					return nil
 				}
@@ -133,15 +156,18 @@ func ExtractFiles(bf *types.BackupFile, base string) error {
 				// Log each new section to give a sense of progress
 				if _, found := section[table]; !found {
 					section[table] = true
-					log.Printf("Populating table `%s` ...", table)
+					if !c.Bool("database") {
+						log.Printf("Populating table `%s` ...", table)
+					}
 				}
 
 				if table == "part" {
 					ps := s.GetParameters()
-					id := *ps[19].IntegerParameter
+					// msg := *ps[1].StringParameter
+					mime := *ps[3].StringParameter
 					// size := *ps[15].IntegerParameter
 					// name := ps[16].StringParameter
-					mime := *ps[3].StringParameter
+					id := *ps[19].IntegerParameter
 
 					aEncs[id] = mime
 					// log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
@@ -155,15 +181,19 @@ func ExtractFiles(bf *types.BackupFile, base string) error {
 				}
 			}
 
-			_, err := db.Exec(stmt, param...)
-			if err != nil {
-				detail := fmt.Sprintf("%s\n%v\nSQL Exec", stmt, param)
-				return errors.Wrap(err, detail)
+			if !c.Bool("database") {
+				_, err := db.Exec(stmt, param...)
+				if err != nil {
+					detail := fmt.Sprintf("%s\n%v\nSQL Exec", stmt, param)
+					return errors.Wrap(err, detail)
+				}
 			}
 
 			return nil
 		},
-		AttachmentFunc: func(a *signal.Attachment) error {
+	}
+	if !c.Bool("attachments") {
+		fns.AttachmentFunc = func(a *signal.Attachment) error {
 			// log.Printf("found attachment binary %v\n", *a.AttachmentId)
 			id := *a.AttachmentId
 
@@ -222,8 +252,10 @@ func ExtractFiles(bf *types.BackupFile, base string) error {
 				}
 			}
 			return nil
-		},
-		AvatarFunc: func(a *signal.Avatar) error {
+		}
+	}
+	if !c.Bool("avatars") {
+		fns.AvatarFunc = func(a *signal.Avatar) error {
 			id := *a.RecipientId
 
 			// Write the file without extension, will rename later
@@ -257,8 +289,10 @@ func ExtractFiles(bf *types.BackupFile, base string) error {
 			}
 
 			return nil
-		},
-		StickerFunc: func(a *signal.Sticker) error {
+		}
+	}
+	if !c.Bool("stickers") {
+		fns.StickerFunc = func(a *signal.Sticker) error {
 			id := *a.RowId
 
 			// Write the file without extension, will rename later
@@ -292,7 +326,7 @@ func ExtractFiles(bf *types.BackupFile, base string) error {
 			}
 
 			return nil
-		},
+		}
 	}
 
 	if err := bf.Consume(fns); err != nil {

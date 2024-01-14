@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +22,7 @@ var filenameDB = "signal.db"
 var folderAttachment = "Attachments"
 var folderAvatar = "Avatars"
 var folderSticker = "Stickers"
+var stickerInfoFilename = "pack_info.json"
 
 // Extract fulfils the `extract` subcommand.
 var Extract = cli.Command{
@@ -86,6 +88,14 @@ var Extract = cli.Command{
 	},
 }
  
+type stickerInfo struct {
+	Pack_id     string
+	Title       string
+	Author      string
+	sticker_id  uint64
+	cover       bool
+}
+
 func createDB (fileName string) (db *sql.DB, err error) {
 	log.Printf("Begin decrypt into %s", fileName)
 
@@ -135,6 +145,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 	section := make(map[string]bool)
 	aEncs := make(map[uint64]string)
+	stickers := make(map[uint64]stickerInfo)
 
 	fns := types.ConsumeFuncs{
 		StatementFunc: func(s *signal.SqlStatement) error {
@@ -161,8 +172,9 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 					}
 				}
 
-				if table == "part" {
-					ps := s.GetParameters()
+				ps := s.GetParameters()
+				switch table {
+				case "part":
 					// msg := *ps[1].StringParameter
 					mime := *ps[3].StringParameter
 					// size := *ps[15].IntegerParameter
@@ -171,6 +183,16 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 					aEncs[id] = mime
 					// log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
+
+				case "sticker":
+					id := *ps[0].IntegerParameter
+					stickers[id] = stickerInfo{
+						Pack_id: *ps[1].StringParameter,
+						Title: *ps[3].StringParameter,
+						Author: *ps[4].StringParameter,
+						sticker_id: *ps[5].IntegerParameter,
+						cover: (*ps[6].IntegerParameter != 0),
+					}
 				}
 
 				// db.Exec cannot know which member of Parameter struct to use
@@ -301,16 +323,18 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
 			if err != nil {
-				return errors.Wrap(err, "failed to open output file")
+				return errors.Wrap(err, "failed to open sticker file")
 			}
+			defer file.Close()
 			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
 				return errors.Wrap(err, "failed to decrypt sticker")
 			}
 			if err = file.Close(); err != nil {
-				return errors.Wrap(err, "failed to close output file")
+				return errors.Wrap(err, "failed to close sticker file")
 			}
 
 			// Look into the file header itself to detect proper extension.
+			ext := ""
 			kind, err := filetype.MatchFile(pathName)
 			if err != nil {
 				log.Println(err.Error())
@@ -318,11 +342,38 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			if kind == filetype.Unknown {
 				log.Printf("unable to detect file type of %v", pathName)
 			} else {
-				// Rename the file with proper extension
-				ext := kind.Extension
-				if err = os.Rename(pathName, pathName+"."+ext); err != nil {
-					return errors.Wrap(err, "unable to rename output file")
-				}
+				ext = "." + kind.Extension
+			}
+
+			// Write pack info
+			info := stickers[id]
+			packPath := path.Join(base, folderSticker, info.Pack_id)
+			if err := os.MkdirAll(packPath, 0755); err != nil {
+				msg := fmt.Sprintf("unable to create sticker pack directory: %s", packPath)
+				return errors.Wrap(err, msg)
+			}
+			infoPath := path.Join(packPath, stickerInfoFilename)
+			file, err = os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+			if err != nil {
+				return errors.Wrap(err, "failed to open sticker pack info file")
+			}
+			defer file.Close()
+			data, err := json.Marshal(info)
+			if err != nil {
+				return errors.Wrap(err, "failed to format pack info file")
+			}
+			if _, err = file.Write(data); err != nil {
+				return errors.Wrap(err, "failed to write pack info file")
+			}
+			if err = file.Close(); err != nil {
+				return errors.Wrap(err, "failed to close pack info file")
+			}
+
+			// Rename the file
+			newName := path.Join(packPath, fmt.Sprintf("%d%s", info.sticker_id, ext))
+			if err = os.Rename(pathName, newName); err != nil {
+				msg := fmt.Sprintf("unable to rename sticker file to: %s", newName)
+				return errors.Wrap(err, msg)
 			}
 
 			return nil

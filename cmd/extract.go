@@ -64,17 +64,17 @@ var Extract = cli.Command{
 			}
 		}
 		if !c.Bool("attachments") {
-			if err := os.Mkdir(path.Join(basePath, folderAttachment), 0755); err != nil {
+			if err := os.MkdirAll(path.Join(basePath, folderAttachment), 0755); err != nil {
 				return errors.Wrap(err, "unable to create attachment directory")
 			}
 		}
 		if !c.Bool("avatars") {
-			if err := os.Mkdir(path.Join(basePath, folderAvatar), 0755); err != nil {
+			if err := os.MkdirAll(path.Join(basePath, folderAvatar), 0755); err != nil {
 				return errors.Wrap(err, "unable to create avatar directory")
 			}
 		}
 		if !c.Bool("stickers") {
-			if err := os.Mkdir(path.Join(basePath, folderSticker), 0755); err != nil {
+			if err := os.MkdirAll(path.Join(basePath, folderSticker), 0755); err != nil {
 				return errors.Wrap(err, "unable to create sticker directory")
 			}
 		}

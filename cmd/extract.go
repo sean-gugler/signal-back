@@ -89,6 +89,13 @@ var Extract = cli.Command{
 	},
 }
 
+type attachmentInfo struct {
+	msg     uint64
+	mime    *string
+	size    uint64
+	name    *string
+}
+ 
 type avatarInfo struct {
 	DisplayName *string
 	ProfileName *string
@@ -150,10 +157,10 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 		defer db.Close()
 	}
 
-	section := make(map[string]bool)
-	aEncs := make(map[uint64]string)
-	avatars := make(map[string]avatarInfo)
-	stickers := make(map[uint64]stickerInfo)
+	section     := make(map[string]bool)
+	attachments := make(map[uint64]attachmentInfo)
+	avatars     := make(map[string]avatarInfo)
+	stickers    := make(map[uint64]stickerInfo)
 
 	fns := types.ConsumeFuncs{
 		StatementFunc: func(s *signal.SqlStatement) error {
@@ -183,14 +190,28 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				ps := s.GetParameters()
 				switch table {
 				case "part":
-					// msg := *ps[1].StringParameter
-					mime := *ps[3].StringParameter
-					// size := *ps[15].IntegerParameter
-					// name := ps[16].StringParameter
 					id := *ps[19].IntegerParameter
-
-					aEncs[id] = mime
-					// log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
+					attachments[id] = attachmentInfo{
+						msg:    *ps[1].IntegerParameter,
+						mime:    ps[3].StringParameter,
+						size:   *ps[15].IntegerParameter,
+						name:    ps[16].StringParameter,
+					}
+					msg := fmt.Sprintf("found attachment metadata %v: ", id)
+					s := attachments[id].mime
+					if s == nil {
+						msg += "<nil>"
+					} else {
+						msg += *s
+					}
+					msg += "   "
+					s = attachments[id].name
+					if s == nil {
+						msg += "<nil>"
+					} else {
+						msg += *s
+					}
+					// log.Println(msg)
 
 				case "recipient":
 					id := fmt.Sprintf("%d", *ps[0].IntegerParameter)
@@ -232,7 +253,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	}
 	if !c.Bool("attachments") {
 		fns.AttachmentFunc = func(a *signal.Attachment) error {
-			// log.Printf("found attachment binary %v\n", *a.AttachmentId)
 			id := *a.AttachmentId
 
 			// Write the file without extension, will rename later
@@ -241,22 +261,40 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
 			if err != nil {
-				return errors.Wrap(err, "failed to open output file")
+				return errors.Wrap(err, "failed to open attachment file")
 			}
+			defer file.Close()
 			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
 				return errors.Wrap(err, "failed to decrypt attachment")
 			}
 			if err = file.Close(); err != nil {
-				return errors.Wrap(err, "failed to close output file")
+				return errors.Wrap(err, "failed to close attachment file")
 			}
 
+//TODO
+//prefs
+//sanity check lengths
+//timestamp attachment
+//use attachment's original filename
+//sanity check original extension
+//refactor to make all 3 save directly to filename, then rename ext based on mime
+
 			// Report any issues with declared type
-			mime, hasMime := aEncs[id]
-			mimeExt, hasExt := GetExtension(mime)
-			if !hasMime {
-				log.Printf("file `%v` has no associated SQL entry, no declared MIME type", id)
-			} else if !hasExt {
-				log.Printf("mime type `%s` not recognised\n", mime)
+			mime := ""
+			mimeExt, hasExt := "", false
+			info, hasInfo := attachments[id]
+			if !hasInfo {
+				log.Printf("attachment `%v` has no associated SQL entry", id)
+			} else {
+				if info.mime == nil {
+					log.Printf("file `%v` has no declared MIME type", id)
+				} else {
+					mime = *info.mime
+					mimeExt, hasExt = GetExtension(mime)
+					if !hasExt {
+						log.Printf("mime type `%s` not recognised", mime)
+					}
+				}
 			}
 
 			// Look into the file header itself to detect proper extension.
@@ -270,16 +308,16 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			if kind == filetype.Unknown {
 				log.Printf("unable to detect file type")
 				if hasExt {
-					log.Printf("using declared MIME type: %s (.%s)\n", mime, mimeExt)
+					log.Printf("using declared MIME type: %s (.%s)", mime, mimeExt)
 					ext = mimeExt
 				} else {
 					log.Println("*** Please create a PR or issue if you think it have should been.")
 					log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
 				}
 			} else {
-				if hasMime && hasExt && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
+				if mime != "" && hasExt && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
 					log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
-					log.Printf("mismatches declared type: %s (.%s)\n", mime, mimeExt)
+					log.Printf("mismatches declared type: %s (.%s)", mime, mimeExt)
 				}
 			}
 

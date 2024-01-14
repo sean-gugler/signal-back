@@ -87,6 +87,11 @@ var Extract = cli.Command{
 		return nil
 	},
 }
+
+type avatarInfo struct {
+	DisplayName *string
+	ProfileName *string
+}
  
 type stickerInfo struct {
 	Pack_id     string
@@ -145,6 +150,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 	section := make(map[string]bool)
 	aEncs := make(map[uint64]string)
+	avatars := make(map[string]avatarInfo)
 	stickers := make(map[uint64]stickerInfo)
 
 	fns := types.ConsumeFuncs{
@@ -184,14 +190,21 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 					aEncs[id] = mime
 					// log.Printf("found attachment metadata %v:%v `%v`\n", id, mime, ps)
 
+				case "recipient":
+					id := fmt.Sprintf("%d", *ps[0].IntegerParameter)
+					avatars[id] = avatarInfo{
+						DisplayName:    ps[17].StringParameter,
+						ProfileName:    ps[22].StringParameter,
+					}
+
 				case "sticker":
 					id := *ps[0].IntegerParameter
 					stickers[id] = stickerInfo{
-						Pack_id: *ps[1].StringParameter,
-						Title: *ps[3].StringParameter,
-						Author: *ps[4].StringParameter,
+						Pack_id:    *ps[1].StringParameter,
+						Title:      *ps[3].StringParameter,
+						Author:     *ps[4].StringParameter,
 						sticker_id: *ps[5].IntegerParameter,
-						cover: (*ps[6].IntegerParameter != 0),
+						cover:     (*ps[6].IntegerParameter != 0),
 					}
 				}
 
@@ -286,16 +299,18 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
 			if err != nil {
-				return errors.Wrap(err, "failed to open output file")
+				return errors.Wrap(err, "failed to open avatar file")
 			}
+			defer file.Close()
 			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
 				return errors.Wrap(err, "failed to decrypt avatar")
 			}
 			if err = file.Close(); err != nil {
-				return errors.Wrap(err, "failed to close output file")
+				return errors.Wrap(err, "failed to close avatar file")
 			}
 
 			// Look into the file header itself to detect proper extension.
+			ext := ""
 			kind, err := filetype.MatchFile(pathName)
 			if err != nil {
 				log.Println(err.Error())
@@ -303,11 +318,20 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			if kind == filetype.Unknown {
 				log.Printf("unable to detect file type of %v", pathName)
 			} else {
-				// Rename the file with proper extension
-				ext := kind.Extension
-				if err = os.Rename(pathName, pathName+"."+ext); err != nil {
-					return errors.Wrap(err, "unable to rename output file")
-				}
+				ext = "." + kind.Extension
+			}
+
+			// Rename the file
+			info := avatars[id]
+			if info.DisplayName != nil {
+				fileName += fmt.Sprintf(" (%s)", *info.DisplayName)
+			} else if info.ProfileName != nil {
+				fileName += fmt.Sprintf(" (%s)", *info.ProfileName)
+			}
+			newName := path.Join(base, folderAvatar, fmt.Sprintf("%s%s", fileName, ext))
+			if err = os.Rename(pathName, newName); err != nil {
+				msg := fmt.Sprintf("unable to rename avatar file to: %s", newName)
+				return errors.Wrap(err, msg)
 			}
 
 			return nil

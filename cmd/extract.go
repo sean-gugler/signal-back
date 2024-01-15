@@ -259,7 +259,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 //TODO
 //prefs
-//timestamp attachment
 //use attachment's original filename
 //sanity check original extension
 //refactor to make all 3 save directly to filename, then rename ext based on mime
@@ -306,6 +305,14 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				if mime != "" && hasExt && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
 					log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
 					log.Printf("mismatches declared type: %s (.%s)", mime, mimeExt)
+				}
+			}
+
+			if id != 0 {
+				atime := time.UnixMilli(0) //leave unchanged
+				mtime := time.UnixMilli(int64(id))
+				if err = os.Chtimes(pathName, atime, mtime); err != nil {
+					return errors.Wrap(err, "failed to change timestamp of attachment file")
 				}
 			}
 

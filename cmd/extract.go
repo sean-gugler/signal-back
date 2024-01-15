@@ -125,20 +125,6 @@ func createDB (fileName string) (db *sql.DB, err error) {
 	return db, nil
 }
 
-func ParameterValue(p *signal.SqlStatement_SqlParameter) interface{} {
-	if p.StringParameter != nil {
-		return p.StringParameter
-	} else if p.IntegerParameter != nil {
-		signed := int64(*p.IntegerParameter)
-		return signed
-	} else if p.DoubleParameter != nil {
-		return *p.DoubleParameter
-	} else if p.BlobParameter != nil {
-		return p.BlobParameter
-	}
-	return nil
-}
-
 // ExtractFiles consumes all decrypted data from the backup file and
 // dispatches it to an appropriate location.
 func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
@@ -157,6 +143,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 		defer db.Close()
 	}
 
+	schema      := make(map[string]*types.Schema)
 	section     := make(map[string]bool)
 	attachments := make(map[uint64]attachmentInfo)
 	avatars     := make(map[string]avatarInfo)
@@ -177,75 +164,64 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 			if strings.HasPrefix(stmt, "CREATE TABLE ") {
 				a := strings.SplitN(stmt, " ", 4)
-				table := unwrap(a[2], `""`)
-				if !c.Bool("database") && strings.HasPrefix(table, "sqlite_") {
-					log.Printf("*** Skipping RESERVED table name %s", table)
+				table := types.Unwrap(a[2], `""`)
+
+				if strings.HasPrefix(table, "sqlite_") {
+					if !c.Bool("database") {
+						log.Printf("*** Skipping RESERVED table name %s", table)
+					}
 					return nil
 				}
+				schema[table] = types.NewSchema(a[3])
 
 			} else if strings.HasPrefix(stmt, "INSERT INTO ") {
 				a := strings.SplitN(stmt, " ", 4)
-				table := unwrap(a[2], `""`)
+				table := types.Unwrap(a[2], `""`)
 
-				// Log each new section to give a sense of progress
-				if _, found := section[table]; !found {
-					section[table] = true
-					if !c.Bool("database") {
+				if !c.Bool("database") {
+					// Log each new section to give a sense of progress
+					if _, found := section[table]; !found {
+						section[table] = true
 						log.Printf("Populating table `%s` ...", table)
 					}
 				}
 
+				sch := schema[table]
 				ps := s.GetParameters()
 				switch table {
 				case "part":
-					id := *ps[19].IntegerParameter
+					id := *sch.Field(ps, "unique_id").(*uint64)
 					attachments[id] = attachmentInfo{
-						msg:    *ps[1].IntegerParameter,
-						mime:    ps[3].StringParameter,
-						size:   *ps[15].IntegerParameter,
-						name:    ps[16].StringParameter,
+						msg:    *sch.Field(ps, "mid").(*uint64),
+						mime:    sch.Field(ps, "ct").(*string),
+						size:   *sch.Field(ps, "data_size").(*uint64),
+						name:    sch.Field(ps, "file_name").(*string),
 					}
-					msg := fmt.Sprintf("found attachment metadata %v: ", id)
-					s := attachments[id].mime
-					if s == nil {
-						msg += "<nil>"
-					} else {
-						msg += *s
-					}
-					msg += "   "
-					s = attachments[id].name
-					if s == nil {
-						msg += "<nil>"
-					} else {
-						msg += *s
-					}
-					// log.Println(msg)
 
 				case "recipient":
-					id := fmt.Sprintf("%d", *ps[0].IntegerParameter)
-					avatars[id] = avatarInfo{
-						DisplayName:    ps[17].StringParameter,
-						ProfileName:    ps[22].StringParameter,
-						fetchTime:     *ps[38].IntegerParameter,
+					n_id := *sch.Field(ps, "_id").(*uint64)
+					s_id := fmt.Sprintf("%d", n_id)
+					avatars[s_id] = avatarInfo{
+						DisplayName:    sch.Field(ps, "system_display_name").(*string),
+						ProfileName:    sch.Field(ps, "signal_profile_name").(*string),
+						fetchTime:     *sch.Field(ps, "last_profile_fetch").(*uint64),
 					}
 
 				case "sticker":
-					id := *ps[0].IntegerParameter
+					id := *sch.Field(ps, "_id").(*uint64)
 					stickers[id] = stickerInfo{
-						Pack_id:    *ps[1].StringParameter,
-						Title:      *ps[3].StringParameter,
-						Author:     *ps[4].StringParameter,
-						sticker_id: *ps[5].IntegerParameter,
-						cover:     (*ps[6].IntegerParameter != 0),
+						Pack_id:    *sch.Field(ps, "pack_id").(*string),
+						Title:      *sch.Field(ps, "pack_title").(*string),
+						Author:     *sch.Field(ps, "pack_author").(*string),
+						sticker_id: *sch.Field(ps, "sticker_id").(*uint64),
+						cover:     (*sch.Field(ps, "cover").(*uint64) != 0),
 					}
 				}
 
 				// db.Exec cannot know which member of Parameter struct to use
 				// so we convert from a uniform array of polymorphic struct
 				// into a generic array of concrete types
-				for i, v := range s.Parameters {
-					param[i] = ParameterValue(v)
-				}
+				param = sch.RowValues(s.Parameters)
 			}
 
 			if !c.Bool("database") {
@@ -294,6 +270,9 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			if !hasInfo {
 				log.Printf("attachment `%v` has no associated SQL entry", id)
 			} else {
+				if info.size != uint64(a.GetLength()) {
+					log.Printf("attachment length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
+				}
 				if info.mime == nil {
 					log.Printf("file `%v` has no declared MIME type", id)
 				} else {

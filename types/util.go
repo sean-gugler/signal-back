@@ -41,3 +41,12 @@ func rescue(v ...interface{}) {
 		}
 	}
 }
+
+// Remove delimiters such as () or "" that may wrap a substring
+func Unwrap(s string, delim string) string {
+	if len(s) > 2 && s[0] == delim[0] && s[len(s)-1] == delim[1] {
+		return s[1:len(s)-1]
+	} else {
+		return s
+	}
+}

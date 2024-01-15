@@ -60,15 +60,6 @@ var Analyse = cli.Command{
 
 var examples = map[string]*signal.SqlStatement{}
 
-// Remove delimiters such as () or "" that may wrap a substring
-func unwrap(s string, delim string) string {
-	if len(s) > 2 && s[0] == delim[0] && s[len(s)-1] == delim[1] {
-		return s[1:len(s)-1]
-	} else {
-		return s
-	}
-}
-
 // AnalyseFile tabulates the frequency of all records in the backup file.
 func AnalyseFile(bf *types.BackupFile, c *cli.Context) (map[string]int, error) {
 	defer func() {

@@ -164,6 +164,14 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 	fns := types.ConsumeFuncs{
 		StatementFunc: func(s *signal.SqlStatement) error {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Println(*s.Statement)
+					log.Println(s.Parameters)
+					panic(r)
+				}
+			}()
+
 			stmt := s.GetStatement()
 			param := make([]interface{}, len(s.Parameters))
 

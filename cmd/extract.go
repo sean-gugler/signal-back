@@ -106,6 +106,7 @@ type stickerInfo struct {
 	Pack_id     string
 	Title       string
 	Author      string
+	size        uint64
 	sticker_id  uint64
 	cover       bool
 }
@@ -213,6 +214,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 						Pack_id:    *sch.Field(ps, "pack_id").(*string),
 						Title:      *sch.Field(ps, "pack_title").(*string),
 						Author:     *sch.Field(ps, "pack_author").(*string),
+						size:       *sch.Field(ps, "file_length").(*uint64),
 						sticker_id: *sch.Field(ps, "sticker_id").(*uint64),
 						cover:     (*sch.Field(ps, "cover").(*uint64) != 0),
 					}
@@ -257,7 +259,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 //TODO
 //prefs
-//sanity check lengths
 //timestamp attachment
 //use attachment's original filename
 //sanity check original extension
@@ -406,6 +407,10 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 			// Write pack info
 			info := stickers[id]
+			if info.size != uint64(a.GetLength()) {
+				log.Printf("sticker length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
+			}
+
 			packPath := path.Join(base, folderSticker, info.Pack_id)
 			if err := os.MkdirAll(packPath, 0755); err != nil {
 				msg := fmt.Sprintf("unable to create sticker pack directory: %s", packPath)

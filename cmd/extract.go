@@ -243,8 +243,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			return nil
 		},
 	}
-//TODO
-//refactor to make all 3 save directly to filename, then rename ext based on mime
 
 	if !c.Bool("attachments") {
 		fns.AttachmentFunc = func(a *signal.Attachment) error {
@@ -253,7 +251,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 			fileName := fmt.Sprintf("%v", id)
 			mime := ""
-			mimeExt := ""
 
 			if !hasInfo {
 				log.Printf("attachment `%v` has no associated SQL entry", id)
@@ -264,89 +261,30 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				if name := info.name; name != nil {
 					fileName += "." + *name
 				}
+
+				// Report any issues with declared type
 				if info.mime == nil {
 					log.Printf("file `%v` has no declared MIME type", id)
 				} else {
 					mime = *info.mime
-					hasExt := false
-					mimeExt, hasExt = GetExtension(mime)
-					if !hasExt {
-						log.Printf("mime type `%s` not recognised", mime)
-					}
 				}
 			}
 
-			// Write the file without extension, will rename later
 			pathName := path.Join(base, folderAttachment, fileName)
-			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
-			if err != nil {
-				return errors.Wrap(err, "failed to open attachment file")
-			}
-			defer file.Close()
-			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
-				return errors.Wrap(err, "failed to decrypt attachment")
-			}
-			if err = file.Close(); err != nil {
-				return errors.Wrap(err, "failed to close attachment file")
-			}
-
-			// Report any issues with declared type
-
-			// Look into the file header itself to detect proper extension.
-			ext := ""
-			kind, err := filetype.MatchFile(pathName)
-			if err != nil {
-				log.Println(err.Error())
-				ext = mimeExt
+			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
+				return errors.Wrap(err, "attachment")
 			} else {
-				// Reconcile any inconsistencies with declared type
-				if kind != filetype.Unknown {
-					ext = kind.Extension
-					if mimeExt != "" && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
-						log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
-						log.Printf("mismatches declared type: %s (.%s)", mime, mimeExt)
-					}
-				} else {
-					log.Printf("unable to detect file type of %v", pathName)
-					if mimeExt != "" {
-						log.Printf("using declared MIME type: %s (.%s)", mime, mimeExt)
-						ext = mimeExt
-					} else {
-						log.Println("*** Please create a PR or issue if you think it have should been.")
-						log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
-					}
+				// ext := detectFileExtension(pathName, mime)
+
+				// if newName, err := fixFileExtension(pathName, ext); err != nil {
+				if newName, err := fixFileExtension(pathName, mime); err != nil {
+					return errors.Wrap(err, "attachment")
+
+				} else if err := setFileTimestamp(newName, id); err != nil {
+					return errors.Wrap(err, "attachment")
 				}
 			}
-
-			// Append proper extension if existing one disagrees
-			givenExt := path.Ext(pathName)
-			if givenExt == ".jpeg" {
-				givenExt = ".jpg"
-			}
-			if givenExt == "." + ext {
-				ext = ""
-			}
-
-			// Rename the file with proper extension
-			newName := pathName
-			if ext != "" {
-				newName += "." + ext
-			}
-			if newName != pathName {
-				if err = os.Rename(pathName, newName); err != nil {
-					return errors.Wrap(err, "unable to rename output file")
-				}
-			}
-
-			if id != 0 {
-				atime := time.UnixMilli(0) //leave unchanged
-				mtime := time.UnixMilli(id)
-				if err = os.Chtimes(newName, atime, mtime); err != nil {
-					return errors.Wrap(err, "failed to change timestamp of attachment file")
-				}
-			}
-
 			return nil
 		}
 	}
@@ -355,7 +293,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			id := *a.RecipientId
 			info := avatars[id]
 
-			// Write the file without extension, will rename later
 			fileName := fmt.Sprintf("%v", id)
 			if info.DisplayName != nil {
 				fileName += fmt.Sprintf(" (%s)", *info.DisplayName)
@@ -364,52 +301,13 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 
 			pathName := path.Join(base, folderAvatar, fileName)
-			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-
-			if err != nil {
-				return errors.Wrap(err, "failed to open avatar file")
+			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
+				return errors.Wrap(err, "avatar")
+			} else if newName, err := fixFileExtension(pathName, ""); err != nil {
+				return errors.Wrap(err, "avatar")
+			} else if err := setFileTimestamp(newName, info.fetchTime); err != nil {
+				return errors.Wrap(err, "avatar")
 			}
-			defer file.Close()
-			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
-				return errors.Wrap(err, "failed to decrypt avatar")
-			}
-			if err = file.Close(); err != nil {
-				return errors.Wrap(err, "failed to close avatar file")
-			}
-
-			// Look into the file header itself to detect proper extension.
-			ext := ""
-			kind, err := filetype.MatchFile(pathName)
-			if err != nil {
-				log.Println(err.Error())
-			} else {
-				if kind == filetype.Unknown {
-					log.Printf("unable to detect file type of %v", pathName)
-				} else {
-					ext = kind.Extension
-				}
-			}
-
-			// Rename the file
-			newName := pathName
-			if ext != "" {
-				newName += "." + ext
-			}
-			if newName != pathName {
-				// newName := path.Join(base, folderAvatar, fmt.Sprintf("%s%s", fileName, ext))
-				if err = os.Rename(pathName, newName); err != nil {
-					msg := fmt.Sprintf("unable to rename avatar file to: %s", newName)
-					return errors.Wrap(err, msg)
-				}
-			}
-			if info.fetchTime != 0 {
-				atime := time.UnixMilli(0) //leave unchanged
-				mtime := time.UnixMilli(info.fetchTime)
-				if err = os.Chtimes(newName, atime, mtime); err != nil {
-					return errors.Wrap(err, "failed to change timestamp of avatar file")
-				}
-			}
-
 			return nil
 		}
 	}
@@ -428,51 +326,17 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				return errors.Wrap(err, msg)
 			}
 
-			// Write the file without extension, will rename later
 			fileName := fmt.Sprintf("%d", info.sticker_id)
 			pathName := path.Join(packPath, fileName)
-			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-
-			if err != nil {
-				return errors.Wrap(err, "failed to open sticker file")
-			}
-			defer file.Close()
-			if err = bf.DecryptAttachment(a.GetLength(), file); err != nil {
-				return errors.Wrap(err, "failed to decrypt sticker")
-			}
-			if err = file.Close(); err != nil {
-				return errors.Wrap(err, "failed to close sticker file")
-			}
-
-			// Look into the file header itself to detect proper extension.
-			ext := ""
-			kind, err := filetype.MatchFile(pathName)
-			if err != nil {
-				log.Println(err.Error())
-			} else {
-				if kind == filetype.Unknown {
-					log.Printf("unable to detect file type of %v", pathName)
-				} else {
-					ext = kind.Extension
-				}
-			}
-
-			// Rename the file
-			newName := pathName
-			if ext != "" {
-				newName += "." + ext
-			}
-			if newName != pathName {
-				// newName := path.Join(packPath, fmt.Sprintf("%d%s", info.sticker_id, ext))
-				if err = os.Rename(pathName, newName); err != nil {
-					msg := fmt.Sprintf("unable to rename sticker file to: %s", newName)
-					return errors.Wrap(err, msg)
-				}
+			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
+				return errors.Wrap(err, "sticker")
+			} else if _, err := fixFileExtension(pathName, ""); err != nil {
+				return errors.Wrap(err, "sticker")
 			}
 
 			// Write pack info
 			infoPath := path.Join(packPath, stickerInfoFilename)
-			file, err = os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+			file, err := os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 			if err != nil {
 				return errors.Wrap(err, "failed to open sticker pack info file")
 			}
@@ -569,6 +433,95 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	log.Println("Done!")
 
 	return nil
+}
+
+func writeAttachment(bf *types.BackupFile, length uint32, pathName string) error {
+	file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to create " + pathName)
+	}
+	defer file.Close()
+	if err = bf.DecryptAttachment(length, file); err != nil {
+		return errors.Wrap(err, "failed to decrypt " + pathName)
+	}
+	if err = file.Close(); err != nil {
+		return errors.Wrap(err, "failed to close " + pathName)
+	}
+	return nil
+}
+
+func setFileTimestamp(pathName string, milliseconds int64) error {
+	if milliseconds != 0 {
+		atime := time.UnixMilli(0) //leave unchanged
+		mtime := time.UnixMilli(milliseconds)
+
+		if err := os.Chtimes(pathName, atime, mtime); err != nil {
+			return errors.Wrap(err, "failed to change timestamp of attachment file")
+		}
+	}
+	return nil
+}
+
+// func detectFileExtension(pathName string, mimeType string) string {
+// func fixFileExtension(pathName string, ext string) (string, error) {
+func fixFileExtension(pathName string, mimeType string) (string, error) {
+	mimeExt := ""
+	hasExt := false
+	if mimeType != "" {
+		mimeExt, hasExt = GetExtension(mimeType)
+		// mimeExt, hasExt := GetExtension(mimeType)
+		if !hasExt {
+			log.Printf("mime type `%s` not recognised", mimeType)
+			mimeExt = ""
+		}
+	}
+
+	// Inspect the file data itself to detect proper extension
+	ext := ""
+	if kind, err := filetype.MatchFile(pathName); err != nil {
+		log.Println(err.Error())
+		ext = mimeExt
+	} else {
+		// Reconcile any inconsistencies with declared type
+		if kind != filetype.Unknown {
+			ext = kind.Extension
+			if mimeExt != "" && (kind.Extension != mimeExt || kind.MIME.Value != mimeType) {
+				log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
+				log.Printf("mismatches declared type: %s (.%s)", mimeType, mimeExt)
+			}
+		} else {
+			log.Printf("unable to detect file type of %v", pathName)
+			if mimeExt != "" {
+				log.Printf("using declared MIME type: %s (.%s)", mimeType, mimeExt)
+				ext = mimeExt
+			} else {
+				log.Println("*** Please create a PR or issue if you think it have should been.")
+				log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
+			}
+		}
+	}
+
+	// Append proper extension if existing one disagrees
+	givenExt := path.Ext(pathName)
+	if givenExt == ".jpeg" {
+		givenExt = ".jpg"
+	}
+	if givenExt == "." + ext {
+		ext = ""
+	}
+
+	// Rename the file with proper extension
+	newName := pathName
+	if ext != "" {
+		newName += "." + ext
+	}
+	if newName != pathName {
+		if err := os.Rename(pathName, newName); err != nil {
+			return "", errors.Wrap(err, "unable to rename output file")
+		}
+	}
+	return newName, nil
 }
 
 // No simple API like 'GetExtension(mime)' found in https://github.com/h2non/filetype

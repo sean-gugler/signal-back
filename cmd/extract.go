@@ -95,24 +95,24 @@ var Extract = cli.Command{
 }
 
 type attachmentInfo struct {
-	msg     uint64
+	msg     int64
 	mime    *string
-	size    uint64
+	size    int64
 	name    *string
 }
  
 type avatarInfo struct {
 	DisplayName *string
 	ProfileName *string
-	fetchTime   uint64
+	fetchTime   int64
 }
  
 type stickerInfo struct {
 	Pack_id     string
 	Title       string
 	Author      string
-	size        uint64
-	sticker_id  uint64
+	size        int64
+	sticker_id  int64
 	cover       bool
 }
 
@@ -151,9 +151,9 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 	schema      := make(map[string]*types.Schema)
 	section     := make(map[string]bool)
-	attachments := make(map[uint64]attachmentInfo)
+	attachments := make(map[int64]attachmentInfo)
 	avatars     := make(map[string]avatarInfo)
-	stickers    := make(map[uint64]stickerInfo)
+	stickers    := make(map[int64]stickerInfo)
 	prefs       := make(map[string]map[string]interface{})
 
 	fns := types.ConsumeFuncs{
@@ -197,32 +197,32 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				ps := s.GetParameters()
 				switch table {
 				case "part":
-					id := *sch.Field(ps, "unique_id").(*uint64)
+					id := *sch.Field(ps, "unique_id").(*int64)
 					attachments[id] = attachmentInfo{
-						msg:    *sch.Field(ps, "mid").(*uint64),
+						msg:    *sch.Field(ps, "mid").(*int64),
 						mime:    sch.Field(ps, "ct").(*string),
-						size:   *sch.Field(ps, "data_size").(*uint64),
+						size:   *sch.Field(ps, "data_size").(*int64),
 						name:    sch.Field(ps, "file_name").(*string),
 					}
 
 				case "recipient":
-					n_id := *sch.Field(ps, "_id").(*uint64)
+					n_id := *sch.Field(ps, "_id").(*int64)
 					s_id := fmt.Sprintf("%d", n_id)
 					avatars[s_id] = avatarInfo{
 						DisplayName:    sch.Field(ps, "system_display_name").(*string),
 						ProfileName:    sch.Field(ps, "signal_profile_name").(*string),
-						fetchTime:     *sch.Field(ps, "last_profile_fetch").(*uint64),
+						fetchTime:     *sch.Field(ps, "last_profile_fetch").(*int64),
 					}
 
 				case "sticker":
-					id := *sch.Field(ps, "_id").(*uint64)
+					id := *sch.Field(ps, "_id").(*int64)
 					stickers[id] = stickerInfo{
 						Pack_id:    *sch.Field(ps, "pack_id").(*string),
 						Title:      *sch.Field(ps, "pack_title").(*string),
 						Author:     *sch.Field(ps, "pack_author").(*string),
-						size:       *sch.Field(ps, "file_length").(*uint64),
-						sticker_id: *sch.Field(ps, "sticker_id").(*uint64),
-						cover:     (*sch.Field(ps, "cover").(*uint64) != 0),
+						size:       *sch.Field(ps, "file_length").(*int64),
+						sticker_id: *sch.Field(ps, "sticker_id").(*int64),
+						cover:     (*sch.Field(ps, "cover").(*int64) != 0),
 					}
 				}
 
@@ -245,7 +245,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	}
 	if !c.Bool("attachments") {
 		fns.AttachmentFunc = func(a *signal.Attachment) error {
-			id := *a.AttachmentId
+			id := int64(*a.AttachmentId)
 
 			// Write the file without extension, will rename later
 			fileName := fmt.Sprintf("%v", id)
@@ -275,7 +275,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			if !hasInfo {
 				log.Printf("attachment `%v` has no associated SQL entry", id)
 			} else {
-				if info.size != uint64(a.GetLength()) {
+				if info.size != int64(a.GetLength()) {
 					log.Printf("attachment length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
 				}
 				if info.mime == nil {
@@ -387,7 +387,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	}
 	if !c.Bool("stickers") {
 		fns.StickerFunc = func(a *signal.Sticker) error {
-			id := *a.RowId
+			id := int64(*a.RowId)
 
 			// Write the file without extension, will rename later
 			fileName := fmt.Sprintf("%v", id)
@@ -419,7 +419,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 			// Write pack info
 			info := stickers[id]
-			if info.size != uint64(a.GetLength()) {
+			if info.size != int64(a.GetLength()) {
 				log.Printf("sticker length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
 			}
 

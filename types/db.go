@@ -105,10 +105,24 @@ func (s *Schema) RowValues (row []*signal.SqlStatement_SqlParameter) []interface
 		pv[i] = ParameterValue(v, s.Type[i])
 		// pv[i] = v.Value(s.Type[i])
 	}
+	// log.Println(pv)
 	return pv
 }
 
 // db.Exec(stmt, PV...)
+
+// Backups.proto declares IntegerParameter as uint64
+//   but there are values of -1 in the database.
+// We must treat all IntegerParameter as int64 to avoid errors during db.Exec
+//   "sql: converting argument $32 type: uint64 values with high bit set are not supported"
+
+func signed(u *uint64) *int64 {
+	if u == nil {
+		return nil
+	}
+	s := int64(*u)
+	return &s
+}
 
 func ParameterValue (p *signal.SqlStatement_SqlParameter, typ ColumnType) interface{} {
 // func (p *SqlParameter) Value (typ ColumnType) interface{} {
@@ -120,7 +134,7 @@ func ParameterValue (p *signal.SqlStatement_SqlParameter, typ ColumnType) interf
 	if         p.StringParameter != nil {
 		return p.StringParameter
 	} else if  p.IntegerParameter != nil {
-		return p.IntegerParameter
+		return signed(p.IntegerParameter)
 	} else if  p.DoubleParameter != nil {
 		return p.DoubleParameter
 	} else if  p.BlobParameter != nil {
@@ -130,7 +144,7 @@ func ParameterValue (p *signal.SqlStatement_SqlParameter, typ ColumnType) interf
 	// return nil value of specific type if possible
 	switch typ {
 	case CT_Text:       return p.StringParameter
-	case CT_Integer:    return p.IntegerParameter
+	case CT_Integer:    return signed(p.IntegerParameter)
 	case CT_Real:       return p.DoubleParameter
 	case CT_Blob:       return p.BlobParameter
 	}

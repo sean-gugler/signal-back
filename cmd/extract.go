@@ -243,12 +243,40 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			return nil
 		},
 	}
+//TODO
+//refactor to make all 3 save directly to filename, then rename ext based on mime
+
 	if !c.Bool("attachments") {
 		fns.AttachmentFunc = func(a *signal.Attachment) error {
 			id := int64(*a.AttachmentId)
+			info, hasInfo := attachments[id]
+
+			fileName := fmt.Sprintf("%v", id)
+			mime := ""
+			mimeExt := ""
+
+			if !hasInfo {
+				log.Printf("attachment `%v` has no associated SQL entry", id)
+			} else {
+				if info.size != int64(a.GetLength()) {
+					log.Printf("attachment length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
+				}
+				if name := info.name; name != nil {
+					fileName += "." + *name
+				}
+				if info.mime == nil {
+					log.Printf("file `%v` has no declared MIME type", id)
+				} else {
+					mime = *info.mime
+					hasExt := false
+					mimeExt, hasExt = GetExtension(mime)
+					if !hasExt {
+						log.Printf("mime type `%s` not recognised", mime)
+					}
+				}
+			}
 
 			// Write the file without extension, will rename later
-			fileName := fmt.Sprintf("%v", id)
 			pathName := path.Join(base, folderAttachment, fileName)
 			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
@@ -263,75 +291,45 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				return errors.Wrap(err, "failed to close attachment file")
 			}
 
-//TODO
-//refactor to make all 3 save directly to filename, then rename ext based on mime
-
 			// Report any issues with declared type
-			mime := ""
-			mimeExt, hasExt := "", false
-			info, hasInfo := attachments[id]
-			if !hasInfo {
-				log.Printf("attachment `%v` has no associated SQL entry", id)
+
+			// Look into the file header itself to detect proper extension.
+			ext := ""
+			kind, err := filetype.MatchFile(pathName)
+			if err != nil {
+				log.Println(err.Error())
+				ext = mimeExt
 			} else {
-				if info.size != int64(a.GetLength()) {
-					log.Printf("attachment length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
-				}
-				if info.mime == nil {
-					log.Printf("file `%v` has no declared MIME type", id)
+				// Reconcile any inconsistencies with declared type
+				if kind != filetype.Unknown {
+					ext = kind.Extension
+					if mimeExt != "" && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
+						log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
+						log.Printf("mismatches declared type: %s (.%s)", mime, mimeExt)
+					}
 				} else {
-					mime = *info.mime
-					mimeExt, hasExt = GetExtension(mime)
-					if !hasExt {
-						log.Printf("mime type `%s` not recognised", mime)
+					log.Printf("unable to detect file type of %v", pathName)
+					if mimeExt != "" {
+						log.Printf("using declared MIME type: %s (.%s)", mime, mimeExt)
+						ext = mimeExt
+					} else {
+						log.Println("*** Please create a PR or issue if you think it have should been.")
+						log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
 					}
 				}
 			}
 
-			// Look into the file header itself to detect proper extension.
-			kind, err := filetype.MatchFile(pathName)
-			if err != nil {
-				log.Println(err.Error())
+			// Append proper extension if existing one disagrees
+			givenExt := path.Ext(pathName)
+			if givenExt == ".jpeg" {
+				givenExt = ".jpg"
 			}
-			ext := kind.Extension
-
-			// Reconcile any inconsistencies with declared type
-			if kind == filetype.Unknown {
-				log.Printf("unable to detect file type")
-				if hasExt {
-					log.Printf("using declared MIME type: %s (.%s)", mime, mimeExt)
-					ext = mimeExt
-				} else {
-					log.Println("*** Please create a PR or issue if you think it have should been.")
-					log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
-				}
-			} else {
-				if mime != "" && hasExt && (kind.Extension != mimeExt || kind.MIME.Value != mime) {
-					log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
-					log.Printf("mismatches declared type: %s (.%s)", mime, mimeExt)
-				}
-			}
-
-			if id != 0 {
-				atime := time.UnixMilli(0) //leave unchanged
-				mtime := time.UnixMilli(int64(id))
-				if err = os.Chtimes(pathName, atime, mtime); err != nil {
-					return errors.Wrap(err, "failed to change timestamp of attachment file")
-				}
+			if givenExt == "." + ext {
+				ext = ""
 			}
 
 			// Rename the file with proper extension
 			newName := pathName
-			if originalName := info.name; originalName != nil {
-				newName += "." + *originalName
-
-				orgExt := path.Ext(newName)
-				if orgExt == ".jpeg" {
-					orgExt = ".jpg"
-				}
-				if orgExt[1:] == ext {
-					ext = ""
-				}
-			}
 			if ext != "" {
 				newName += "." + ext
 			}
@@ -341,15 +339,30 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				}
 			}
 
+			if id != 0 {
+				atime := time.UnixMilli(0) //leave unchanged
+				mtime := time.UnixMilli(id)
+				if err = os.Chtimes(newName, atime, mtime); err != nil {
+					return errors.Wrap(err, "failed to change timestamp of attachment file")
+				}
+			}
+
 			return nil
 		}
 	}
 	if !c.Bool("avatars") {
 		fns.AvatarFunc = func(a *signal.Avatar) error {
 			id := *a.RecipientId
+			info := avatars[id]
 
 			// Write the file without extension, will rename later
 			fileName := fmt.Sprintf("%v", id)
+			if info.DisplayName != nil {
+				fileName += fmt.Sprintf(" (%s)", *info.DisplayName)
+			} else if info.ProfileName != nil {
+				fileName += fmt.Sprintf(" (%s)", *info.ProfileName)
+			}
+
 			pathName := path.Join(base, folderAvatar, fileName)
 			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
@@ -369,28 +382,29 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			kind, err := filetype.MatchFile(pathName)
 			if err != nil {
 				log.Println(err.Error())
-			}
-			if kind == filetype.Unknown {
-				log.Printf("unable to detect file type of %v", pathName)
 			} else {
-				ext = "." + kind.Extension
+				if kind == filetype.Unknown {
+					log.Printf("unable to detect file type of %v", pathName)
+				} else {
+					ext = kind.Extension
+				}
 			}
 
 			// Rename the file
-			info := avatars[id]
-			if info.DisplayName != nil {
-				fileName += fmt.Sprintf(" (%s)", *info.DisplayName)
-			} else if info.ProfileName != nil {
-				fileName += fmt.Sprintf(" (%s)", *info.ProfileName)
+			newName := pathName
+			if ext != "" {
+				newName += "." + ext
 			}
-			newName := path.Join(base, folderAvatar, fmt.Sprintf("%s%s", fileName, ext))
-			if err = os.Rename(pathName, newName); err != nil {
-				msg := fmt.Sprintf("unable to rename avatar file to: %s", newName)
-				return errors.Wrap(err, msg)
+			if newName != pathName {
+				// newName := path.Join(base, folderAvatar, fmt.Sprintf("%s%s", fileName, ext))
+				if err = os.Rename(pathName, newName); err != nil {
+					msg := fmt.Sprintf("unable to rename avatar file to: %s", newName)
+					return errors.Wrap(err, msg)
+				}
 			}
 			if info.fetchTime != 0 {
 				atime := time.UnixMilli(0) //leave unchanged
-				mtime := time.UnixMilli(int64(info.fetchTime))
+				mtime := time.UnixMilli(info.fetchTime)
 				if err = os.Chtimes(newName, atime, mtime); err != nil {
 					return errors.Wrap(err, "failed to change timestamp of avatar file")
 				}
@@ -402,10 +416,21 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	if !c.Bool("stickers") {
 		fns.StickerFunc = func(a *signal.Sticker) error {
 			id := int64(*a.RowId)
+			info := stickers[id]
+
+			if info.size != int64(a.GetLength()) {
+				log.Printf("sticker length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
+			}
+
+			packPath := path.Join(base, folderSticker, info.Pack_id)
+			if err := os.MkdirAll(packPath, 0755); err != nil {
+				msg := fmt.Sprintf("unable to create sticker pack directory: %s", packPath)
+				return errors.Wrap(err, msg)
+			}
 
 			// Write the file without extension, will rename later
-			fileName := fmt.Sprintf("%v", id)
-			pathName := path.Join(base, folderSticker, fileName)
+			fileName := fmt.Sprintf("%d", info.sticker_id)
+			pathName := path.Join(packPath, fileName)
 			file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 
 			if err != nil {
@@ -424,24 +449,28 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			kind, err := filetype.MatchFile(pathName)
 			if err != nil {
 				log.Println(err.Error())
-			}
-			if kind == filetype.Unknown {
-				log.Printf("unable to detect file type of %v", pathName)
 			} else {
-				ext = "." + kind.Extension
+				if kind == filetype.Unknown {
+					log.Printf("unable to detect file type of %v", pathName)
+				} else {
+					ext = kind.Extension
+				}
+			}
+
+			// Rename the file
+			newName := pathName
+			if ext != "" {
+				newName += "." + ext
+			}
+			if newName != pathName {
+				// newName := path.Join(packPath, fmt.Sprintf("%d%s", info.sticker_id, ext))
+				if err = os.Rename(pathName, newName); err != nil {
+					msg := fmt.Sprintf("unable to rename sticker file to: %s", newName)
+					return errors.Wrap(err, msg)
+				}
 			}
 
 			// Write pack info
-			info := stickers[id]
-			if info.size != int64(a.GetLength()) {
-				log.Printf("sticker length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
-			}
-
-			packPath := path.Join(base, folderSticker, info.Pack_id)
-			if err := os.MkdirAll(packPath, 0755); err != nil {
-				msg := fmt.Sprintf("unable to create sticker pack directory: %s", packPath)
-				return errors.Wrap(err, msg)
-			}
 			infoPath := path.Join(packPath, stickerInfoFilename)
 			file, err = os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 			if err != nil {
@@ -457,13 +486,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 			if err = file.Close(); err != nil {
 				return errors.Wrap(err, "failed to close pack info file")
-			}
-
-			// Rename the file
-			newName := path.Join(packPath, fmt.Sprintf("%d%s", info.sticker_id, ext))
-			if err = os.Rename(pathName, newName); err != nil {
-				msg := fmt.Sprintf("unable to rename sticker file to: %s", newName)
-				return errors.Wrap(err, msg)
 			}
 
 			return nil

@@ -258,11 +258,9 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				if info.size != int64(a.GetLength()) {
 					log.Printf("attachment length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
 				}
-				if name := info.name; name != nil {
-					fileName += "." + *name
+				if info.name != nil {
+					fileName += "." + *info.name
 				}
-
-				// Report any issues with declared type
 				if info.mime == nil {
 					log.Printf("file `%v` has no declared MIME type", id)
 				} else {
@@ -274,16 +272,10 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
 				return errors.Wrap(err, "attachment")
-			} else {
-				// ext := detectFileExtension(pathName, mime)
-
-				// if newName, err := fixFileExtension(pathName, ext); err != nil {
-				if newName, err := fixFileExtension(pathName, mime); err != nil {
-					return errors.Wrap(err, "attachment")
-
-				} else if err := setFileTimestamp(newName, id); err != nil {
-					return errors.Wrap(err, "attachment")
-				}
+			} else if newName, err := fixFileExtension(pathName, mime); err != nil {
+				return errors.Wrap(err, "attachment")
+			} else if err := setFileTimestamp(newName, id); err != nil {
+				return errors.Wrap(err, "attachment")
 			}
 			return nil
 		}
@@ -291,13 +283,20 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	if !c.Bool("avatars") {
 		fns.AvatarFunc = func(a *signal.Avatar) error {
 			id := *a.RecipientId
-			info := avatars[id]
+			info, hasInfo := avatars[id]
 
 			fileName := fmt.Sprintf("%v", id)
-			if info.DisplayName != nil {
-				fileName += fmt.Sprintf(" (%s)", *info.DisplayName)
-			} else if info.ProfileName != nil {
-				fileName += fmt.Sprintf(" (%s)", *info.ProfileName)
+			mtime := int64(0)
+
+			if !hasInfo {
+				log.Printf("avatar `%v` has no associated SQL entry", id)
+			} else {
+				if info.DisplayName != nil {
+					fileName += fmt.Sprintf(" (%s)", *info.DisplayName)
+				} else if info.ProfileName != nil {
+					fileName += fmt.Sprintf(" (%s)", *info.ProfileName)
+				}
+				mtime = info.fetchTime
 			}
 
 			pathName := path.Join(base, folderAvatar, fileName)
@@ -305,7 +304,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				return errors.Wrap(err, "avatar")
 			} else if newName, err := fixFileExtension(pathName, ""); err != nil {
 				return errors.Wrap(err, "avatar")
-			} else if err := setFileTimestamp(newName, info.fetchTime); err != nil {
+			} else if err := setFileTimestamp(newName, mtime); err != nil {
 				return errors.Wrap(err, "avatar")
 			}
 			return nil
@@ -314,44 +313,50 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	if !c.Bool("stickers") {
 		fns.StickerFunc = func(a *signal.Sticker) error {
 			id := int64(*a.RowId)
-			info := stickers[id]
+			info, hasInfo := stickers[id]
 
-			if info.size != int64(a.GetLength()) {
-				log.Printf("sticker length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
+			fileName := fmt.Sprintf("%v", id)
+			packPath := path.Join(base, folderSticker)
+
+			if !hasInfo {
+				log.Printf("sticker `%v` has no associated SQL entry", id)
+			} else {
+				if info.size != int64(a.GetLength()) {
+					log.Printf("sticker length (%d) mismatches SQL entry.size (%d)", a.GetLength(), info.size)
+				}
+				fileName = fmt.Sprintf("%d", info.sticker_id)
+
+				packPath = path.Join(packPath, info.Pack_id)
+				if err := os.MkdirAll(packPath, 0755); err != nil {
+					msg := fmt.Sprintf("unable to create sticker pack directory: %s", packPath)
+					return errors.Wrap(err, msg)
+				}
+
+				// Write pack info
+				infoPath := path.Join(packPath, stickerInfoFilename)
+				file, err := os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+				if err != nil {
+					return errors.Wrap(err, "failed to open sticker pack info file")
+				}
+				defer file.Close()
+				data, err := json.Marshal(info)
+				if err != nil {
+					return errors.Wrap(err, "failed to format pack info file")
+				}
+				if _, err = file.Write(data); err != nil {
+					return errors.Wrap(err, "failed to write pack info file")
+				}
+				if err = file.Close(); err != nil {
+					return errors.Wrap(err, "failed to close pack info file")
+				}
 			}
 
-			packPath := path.Join(base, folderSticker, info.Pack_id)
-			if err := os.MkdirAll(packPath, 0755); err != nil {
-				msg := fmt.Sprintf("unable to create sticker pack directory: %s", packPath)
-				return errors.Wrap(err, msg)
-			}
-
-			fileName := fmt.Sprintf("%d", info.sticker_id)
 			pathName := path.Join(packPath, fileName)
 			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
 				return errors.Wrap(err, "sticker")
 			} else if _, err := fixFileExtension(pathName, ""); err != nil {
 				return errors.Wrap(err, "sticker")
 			}
-
-			// Write pack info
-			infoPath := path.Join(packPath, stickerInfoFilename)
-			file, err := os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-			if err != nil {
-				return errors.Wrap(err, "failed to open sticker pack info file")
-			}
-			defer file.Close()
-			data, err := json.Marshal(info)
-			if err != nil {
-				return errors.Wrap(err, "failed to format pack info file")
-			}
-			if _, err = file.Write(data); err != nil {
-				return errors.Wrap(err, "failed to write pack info file")
-			}
-			if err = file.Close(); err != nil {
-				return errors.Wrap(err, "failed to close pack info file")
-			}
-
 			return nil
 		}
 	}

@@ -264,8 +264,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 
 //TODO
-//use attachment's original filename
-//sanity check original extension
 //refactor to make all 3 save directly to filename, then rename ext based on mime
 
 			// Report any issues with declared type
@@ -322,11 +320,27 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 
 			// Rename the file with proper extension
-			if ext != "" { 
-				if err = os.Rename(pathName, pathName+"."+ext); err != nil {
+			newName := pathName
+			if originalName := info.name; originalName != nil {
+				newName += "." + *originalName
+
+				orgExt := path.Ext(newName)
+				if orgExt == ".jpeg" {
+					orgExt = ".jpg"
+				}
+				if orgExt[1:] == ext {
+					ext = ""
+				}
+			}
+			if ext != "" {
+				newName += "." + ext
+			}
+			if newName != pathName {
+				if err = os.Rename(pathName, newName); err != nil {
 					return errors.Wrap(err, "unable to rename output file")
 				}
 			}
+
 			return nil
 		}
 	}

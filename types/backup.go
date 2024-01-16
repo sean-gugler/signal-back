@@ -214,9 +214,9 @@ type ConsumeFuncs struct {
 	PreferenceFunc func(*signal.SharedPreference) error
 	KeyValueFunc   func(*signal.KeyValue) error
 	StatementFunc  func(*signal.SqlStatement) error
-	DebugFunc      func(string) error
 }
 
+// frame attachments MUST be handled, even if discarded
 func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
 	return ConsumeFuncs{
 		AttachmentFunc: func(a *signal.Attachment) error {
@@ -227,12 +227,6 @@ func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
 		},
 		StickerFunc: func(a *signal.Sticker) error {
 			return bf.DecryptAttachment(a.GetLength(), nil)
-		},
-		StatementFunc: func(s *signal.SqlStatement) error {
-			return nil
-		},
-		DebugFunc: func(s string) error {
-			return nil
 		},
 	}
 }
@@ -247,7 +241,8 @@ func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
 // spent.
 func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 	var (
-		frame_length uint32
+		pos     int64
+		length  uint32
 		f       *signal.BackupFrame
 		err     error
 		discard = DiscardConsumeFuncs(bf)
@@ -264,72 +259,66 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 	if fns.StickerFunc == nil {
 		fns.StickerFunc = discard.StickerFunc
 	}
-	if fns.StatementFunc == nil {
-		fns.StatementFunc = discard.StatementFunc
-	}
-	if fns.DebugFunc == nil {
-		fns.DebugFunc = discard.DebugFunc
-	}
 
-	for frame_number := 1; ; frame_number++ {
-		pos, serr := bf.file.Seek(0, io.SeekCurrent)
-		if serr != nil {
-			return errors.Wrap(serr, "consume [seek]")
+	for {
+		pos, err = bf.file.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return errors.Wrap(err, "consume [seek]")
 		}
 
-		frame_length, f, err = bf.Frame()
+		length, f, err = bf.Frame()
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return err
 		}
 
-		if frame_number == 1 {
-			s := fmt.Sprintf("%08X: FRAME %d length %d\nheader:<iv:%x, salt:%x>", 0, 0, pos, bf.IV, bf.Salt)
-			if err = fns.DebugFunc(s); err != nil {
-				return errors.Wrap(err, "consume [debug]")
-			}
-		}
-
-		s := fmt.Sprintf("%08X: FRAME %d length %d\n%v", pos, frame_number, frame_length, f)
-		if err = fns.DebugFunc(s); err != nil {
-			return errors.Wrap(err, "consume [debug]")
-		}
-
 		if fn := fns.FrameFunc; fn != nil {
-			if err = fn(f, pos, frame_length); err != nil {
+			if err = fn(f, pos, length); err != nil {
 				return errors.Wrap(err, "consume [frame]")
 			}
 		}
 
-		if a := f.GetAttachment(); a != nil {
-			if err = fns.AttachmentFunc(a); err != nil {
-				return errors.Wrap(err, "consume [attachment]")
+		if fn := fns.AttachmentFunc; fn != nil {
+			if data := f.GetAttachment(); data != nil {
+				if err = fn(data); err != nil {
+					return errors.Wrap(err, "consume [attachment]")
+				}
 			}
 		}
-		if a := f.GetAvatar(); a != nil {
-			if err = fns.AvatarFunc(a); err != nil {
-				return errors.Wrap(err, "consume [avatar]")
+		if fn := fns.AvatarFunc; fn != nil {
+			if data := f.GetAvatar(); data != nil {
+				if err = fn(data); err != nil {
+					return errors.Wrap(err, "consume [avatar]")
+				}
 			}
 		}
-		if a := f.GetSticker(); a != nil {
-			if err = fns.StickerFunc(a); err != nil {
-				return errors.Wrap(err, "consume [sticker]")
+		if fn := fns.StickerFunc; fn != nil {
+			if data := f.GetSticker(); data != nil {
+				if err = fn(data); err != nil {
+					return errors.Wrap(err, "consume [sticker]")
+				}
 			}
 		}
-		if p := f.GetPreference(); p != nil {
-			if err = fns.PreferenceFunc(p); err != nil {
-				return errors.Wrap(err, "consume [preference]")
+		if fn := fns.PreferenceFunc; fn != nil {
+			if data := f.GetPreference(); data != nil {
+				if err = fn(data); err != nil {
+					return errors.Wrap(err, "consume [preference]")
+				}
 			}
 		}
-		if kv := f.GetKeyValue(); kv != nil {
-			if err = fns.KeyValueFunc(kv); err != nil {
-				return errors.Wrap(err, "consume [keyvalue]")
+		if fn := fns.KeyValueFunc; fn != nil {
+			if data := f.GetKeyValue(); data != nil {
+				if err = fn(data); err != nil {
+					return errors.Wrap(err, "consume [keyvalue]")
+				}
 			}
 		}
-		if stmt := f.GetStatement(); stmt != nil {
-			if err = fns.StatementFunc(stmt); err != nil {
-				return errors.Wrap(err, "consume [statement]")
+		if fn := fns.StatementFunc; fn != nil {
+			if data := f.GetStatement(); data != nil {
+				if err = fn(data); err != nil {
+					return errors.Wrap(err, "consume [statement]")
+				}
 			}
 		}
 	}

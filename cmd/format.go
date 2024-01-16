@@ -329,10 +329,10 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 // debugging.
 func Raw(bf *types.BackupFile, out io.Writer) error {
 	fns := types.ConsumeFuncs{
-		DebugFunc: func(s string) error {
-			_, err := out.Write(append([]byte(s), '\n'))
-			return err
-		},
+		// DebugFunc: func(s string) error {
+			// _, err := out.Write(append([]byte(s), '\n'))
+			// return err
+		// },
 	}
 
 	return errors.WithMessage(bf.Consume(fns), "failed to write raw")

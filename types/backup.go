@@ -211,6 +211,8 @@ type ConsumeFuncs struct {
 	AttachmentFunc func(*signal.Attachment) error
 	AvatarFunc     func(*signal.Avatar) error
 	StickerFunc    func(*signal.Sticker) error
+	PreferenceFunc func(*signal.SharedPreference) error
+	KeyValueFunc   func(*signal.KeyValue) error
 	StatementFunc  func(*signal.SqlStatement) error
 	DebugFunc      func(string) error
 }
@@ -313,6 +315,16 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 		if a := f.GetSticker(); a != nil {
 			if err = fns.StickerFunc(a); err != nil {
 				return errors.Wrap(err, "consume [sticker]")
+			}
+		}
+		if p := f.GetPreference(); p != nil {
+			if err = fns.PreferenceFunc(p); err != nil {
+				return errors.Wrap(err, "consume [preference]")
+			}
+		}
+		if kv := f.GetKeyValue(); kv != nil {
+			if err = fns.KeyValueFunc(kv); err != nil {
+				return errors.Wrap(err, "consume [keyvalue]")
 			}
 		}
 		if stmt := f.GetStatement(); stmt != nil {

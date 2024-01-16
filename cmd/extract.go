@@ -23,6 +23,7 @@ var filenameDB = "signal.db"
 var folderAttachment = "Attachments"
 var folderAvatar = "Avatars"
 var folderSticker = "Stickers"
+var folderSettings = "Settings"
 var stickerInfoFilename = "pack_info.json"
 
 // Extract fulfils the `extract` subcommand.
@@ -47,6 +48,10 @@ var Extract = cli.Command{
 		&cli.BoolFlag{
 			Name:  "stickers",
 			Usage: "Skip extracting stickers",
+		},
+		&cli.BoolFlag{
+			Name:  "settings",
+			Usage: "Skip extracting settings",
 		},
 		&cli.BoolFlag{
 			Name:  "database",
@@ -149,6 +154,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	attachments := make(map[uint64]attachmentInfo)
 	avatars     := make(map[string]avatarInfo)
 	stickers    := make(map[uint64]stickerInfo)
+	prefs       := make(map[string]map[string]interface{})
 
 	fns := types.ConsumeFuncs{
 		StatementFunc: func(s *signal.SqlStatement) error {
@@ -258,7 +264,6 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 
 //TODO
-//prefs
 //use attachment's original filename
 //sanity check original extension
 //refactor to make all 3 save directly to filename, then rename ext based on mime
@@ -450,9 +455,79 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			return nil
 		}
 	}
+	if !c.Bool("settings") {
+		fns.PreferenceFunc = func(p *signal.SharedPreference) error {
+			file := p.GetFile()
+			m, exist := prefs[file]
+			if !exist {
+				m = make(map[string]interface{})
+				prefs[file] = m
+			}
+
+			key := *p.Key
+			if p.GetIsStringSetValue() {
+				m[key] = p.GetStringSetValue()
+			} else if p.BooleanValue != nil {
+				m[key] = p.GetBooleanValue()
+			} else {
+				m[key] = p.Value
+			}
+			
+			return nil
+		}
+		fns.KeyValueFunc = func(kv *signal.KeyValue) error {
+			file := "signal"
+			m, exist := prefs[file]
+			if !exist {
+				m = make(map[string]interface{})
+				prefs[file] = m
+			}
+
+			key := *kv.Key
+			if        kv.BooleanValue != nil {
+				m[key] = kv.GetBooleanValue()
+			} else if kv.FloatValue != nil {
+				m[key] = kv.GetFloatValue()
+			} else if kv.IntegerValue != nil {
+				m[key] = kv.GetIntegerValue()
+			} else if kv.LongValue != nil {
+				m[key] = kv.GetLongValue()
+			} else if kv.StringValue != nil {
+				m[key] = kv.GetStringValue()
+			} else {
+				m[key] = kv.BlobValue
+			}
+
+			return nil
+		}
+	}
 
 	if err := bf.Consume(fns); err != nil {
 		return err
+	}
+
+	for fileName, kv := range prefs {
+		folder := path.Join(base, folderSettings)
+		if err := os.MkdirAll(folder, 0755); err != nil {
+			msg := fmt.Sprintf("unable to create settings directory: %s", folder)
+			return errors.Wrap(err, msg)
+		}
+		pathName := path.Join(folder, fileName + ".json")
+		file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+		if err != nil {
+			return errors.Wrap(err, "failed to open settings file")
+		}
+		defer file.Close()
+		data, err := json.MarshalIndent(kv, "", "\t")
+		if err != nil {
+			return errors.Wrap(err, "failed to format settings file")
+		}
+		if _, err = file.Write(data); err != nil {
+			return errors.Wrap(err, "failed to write settings file")
+		}
+		if err = file.Close(); err != nil {
+			return errors.Wrap(err, "failed to close settings file")
+		}
 	}
 
 	log.Println("Done!")

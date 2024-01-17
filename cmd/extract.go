@@ -86,6 +86,11 @@ var Extract = cli.Command{
 				return errors.Wrap(err, "unable to create sticker directory")
 			}
 		}
+		if !c.Bool("settings") {
+			if err := os.MkdirAll(path.Join(basePath, folderSettings), 0755); err != nil {
+				return errors.Wrap(err, "unable to create settings directory")
+			}
+		}
 		if err = ExtractFiles(bf, c, basePath); err != nil {
 			return errors.Wrap(err, "failed to extract attachment")
 		}
@@ -333,16 +338,16 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				}
 
 				// Write pack info
+				data, err := json.Marshal(info)
+				if err != nil {
+					return errors.Wrap(err, "failed to format pack info file")
+				}
 				infoPath := path.Join(packPath, stickerInfoFilename)
 				file, err := os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 				if err != nil {
 					return errors.Wrap(err, "failed to open sticker pack info file")
 				}
 				defer file.Close()
-				data, err := json.Marshal(info)
-				if err != nil {
-					return errors.Wrap(err, "failed to format pack info file")
-				}
 				if _, err = file.Write(data); err != nil {
 					return errors.Wrap(err, "failed to write pack info file")
 				}
@@ -412,21 +417,16 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	}
 
 	for fileName, kv := range prefs {
-		folder := path.Join(base, folderSettings)
-		if err := os.MkdirAll(folder, 0755); err != nil {
-			msg := fmt.Sprintf("unable to create settings directory: %s", folder)
-			return errors.Wrap(err, msg)
+		data, err := json.MarshalIndent(kv, "", "\t")
+		if err != nil {
+			return errors.Wrap(err, "failed to format settings file")
 		}
-		pathName := path.Join(folder, fileName + ".json")
+		pathName := path.Join(base, folderSettings, fileName + ".json")
 		file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 		if err != nil {
 			return errors.Wrap(err, "failed to open settings file")
 		}
 		defer file.Close()
-		data, err := json.MarshalIndent(kv, "", "\t")
-		if err != nil {
-			return errors.Wrap(err, "failed to format settings file")
-		}
 		if _, err = file.Write(data); err != nil {
 			return errors.Wrap(err, "failed to write settings file")
 		}
@@ -440,9 +440,10 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	return nil
 }
 
+// TODO: figure out how to combine with other Open/Write/Close code above.
+// Maybe use a channel. Ideally find a way that can eliminate DiscardConsumeFuncs.
 func writeAttachment(bf *types.BackupFile, length uint32, pathName string) error {
 	file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-
 	if err != nil {
 		return errors.Wrap(err, "failed to create " + pathName)
 	}
@@ -468,38 +469,32 @@ func setFileTimestamp(pathName string, milliseconds int64) error {
 	return nil
 }
 
-// func detectFileExtension(pathName string, mimeType string) string {
-// func fixFileExtension(pathName string, ext string) (string, error) {
 func fixFileExtension(pathName string, mimeType string) (string, error) {
-	mimeExt := ""
-	hasExt := false
+	// Set default extension by MIME type
+	ext := ""
 	if mimeType != "" {
-		mimeExt, hasExt = GetExtension(mimeType)
-		// mimeExt, hasExt := GetExtension(mimeType)
-		if !hasExt {
+		mimeExt, hasExt := GetExtension(mimeType)
+		if hasExt {
+			ext = mimeExt
+		} else {
 			log.Printf("mime type `%s` not recognised", mimeType)
-			mimeExt = ""
 		}
 	}
 
 	// Inspect the file data itself to detect proper extension
-	ext := ""
 	if kind, err := filetype.MatchFile(pathName); err != nil {
-		log.Println(err.Error())
-		ext = mimeExt
+		log.Println("MatchFile:", err.Error())
 	} else {
-		// Reconcile any inconsistencies with declared type
 		if kind != filetype.Unknown {
-			ext = kind.Extension
-			if mimeExt != "" && (kind.Extension != mimeExt || kind.MIME.Value != mimeType) {
+			if ext != "" && (kind.MIME.Value != mimeType || kind.Extension != ext) {
 				log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
-				log.Printf("mismatches declared type: %s (.%s)", mimeType, mimeExt)
+				log.Printf("mismatches declared type: %s (.%s)", mimeType, ext)
 			}
+			ext = kind.Extension
 		} else {
 			log.Printf("unable to detect file type of %v", pathName)
-			if mimeExt != "" {
-				log.Printf("using declared MIME type: %s (.%s)", mimeType, mimeExt)
-				ext = mimeExt
+			if ext != "" {
+				log.Printf("using declared MIME type: %s (.%s)", mimeType, ext)
 			} else {
 				log.Println("*** Please create a PR or issue if you think it have should been.")
 				log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
@@ -507,7 +502,7 @@ func fixFileExtension(pathName string, mimeType string) (string, error) {
 		}
 	}
 
-	// Append proper extension if existing one disagrees
+	// If existing extension is already correct, do not double-append
 	givenExt := path.Ext(pathName)
 	if givenExt == ".jpeg" {
 		givenExt = ".jpg"
@@ -520,10 +515,8 @@ func fixFileExtension(pathName string, mimeType string) (string, error) {
 	newName := pathName
 	if ext != "" {
 		newName += "." + ext
-	}
-	if newName != pathName {
 		if err := os.Rename(pathName, newName); err != nil {
-			return "", errors.Wrap(err, "unable to rename output file")
+			return "", errors.Wrap(err, "change extension")
 		}
 	}
 	return newName, nil

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path"
@@ -274,8 +275,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 
 			pathName := path.Join(base, folderAttachment, fileName)
-
-			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
+			if err := writeAttachment(pathName, a.GetLength(), bf); err != nil {
 				return errors.Wrap(err, "attachment")
 			} else if newName, err := fixFileExtension(pathName, mime); err != nil {
 				return errors.Wrap(err, "attachment")
@@ -305,7 +305,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 
 			pathName := path.Join(base, folderAvatar, fileName)
-			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
+			if err := writeAttachment(pathName, a.GetLength(), bf); err != nil {
 				return errors.Wrap(err, "avatar")
 			} else if newName, err := fixFileExtension(pathName, ""); err != nil {
 				return errors.Wrap(err, "avatar")
@@ -337,27 +337,14 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 					return errors.Wrap(err, msg)
 				}
 
-				// Write pack info
-				data, err := json.Marshal(info)
-				if err != nil {
-					return errors.Wrap(err, "failed to format pack info file")
-				}
 				infoPath := path.Join(packPath, stickerInfoFilename)
-				file, err := os.OpenFile(infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-				if err != nil {
-					return errors.Wrap(err, "failed to open sticker pack info file")
-				}
-				defer file.Close()
-				if _, err = file.Write(data); err != nil {
-					return errors.Wrap(err, "failed to write pack info file")
-				}
-				if err = file.Close(); err != nil {
-					return errors.Wrap(err, "failed to close pack info file")
+				if err := writeJson(infoPath, info); err != nil {
+					return errors.Wrap(err, "sticker pack info")
 				}
 			}
 
 			pathName := path.Join(packPath, fileName)
-			if err := writeAttachment(bf, a.GetLength(), pathName); err != nil {
+			if err := writeAttachment(pathName, a.GetLength(), bf); err != nil {
 				return errors.Wrap(err, "sticker")
 			} else if _, err := fixFileExtension(pathName, ""); err != nil {
 				return errors.Wrap(err, "sticker")
@@ -417,21 +404,9 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	}
 
 	for fileName, kv := range prefs {
-		data, err := json.MarshalIndent(kv, "", "\t")
-		if err != nil {
-			return errors.Wrap(err, "failed to format settings file")
-		}
 		pathName := path.Join(base, folderSettings, fileName + ".json")
-		file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-		if err != nil {
-			return errors.Wrap(err, "failed to open settings file")
-		}
-		defer file.Close()
-		if _, err = file.Write(data); err != nil {
-			return errors.Wrap(err, "failed to write settings file")
-		}
-		if err = file.Close(); err != nil {
-			return errors.Wrap(err, "failed to close settings file")
+		if err := writeJson(pathName, kv); err != nil {
+			return errors.Wrap(err, "settings")
 		}
 	}
 
@@ -440,16 +415,56 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	return nil
 }
 
-// TODO: figure out how to combine with other Open/Write/Close code above.
-// Maybe use a channel. Ideally find a way that can eliminate DiscardConsumeFuncs.
-func writeAttachment(bf *types.BackupFile, length uint32, pathName string) error {
+func writeJson(pathName string, value interface{}) error {
+	data, err := json.MarshalIndent(value, "", "\t")
+	if err != nil {
+		return errors.Wrap(err, "json marshal error")
+	}
+	return writeFile(pathName, func(file io.Writer) error {
+		_, err := file.Write(data)
+		return err
+	})
+}
+
+
+func writeBytes(pathName string, data []byte) error {
+	return writeFile(pathName, func(file io.Writer) error {
+		_, err := file.Write(data)
+		return err
+	})
+}
+
+func writeAttachment(pathName string, length uint32, bf *types.BackupFile) error {
+	return writeFile(pathName, func(file io.Writer) error {
+		return bf.DecryptAttachment(length, file)
+	})
+}
+
+func writeFile(pathName string, write func(w io.Writer) error) error {
 	file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return errors.Wrap(err, "failed to create " + pathName)
 	}
 	defer file.Close()
-	if err = bf.DecryptAttachment(length, file); err != nil {
-		return errors.Wrap(err, "failed to decrypt " + pathName)
+	if err := write(file); err != nil {
+		return errors.Wrap(err, "failed to write " + pathName)
+	}
+	if err = file.Close(); err != nil {
+		return errors.Wrap(err, "failed to close " + pathName)
+	}
+	return nil
+}
+
+// TODO: figure out how to combine with other Open/Write/Close code above.
+// Maybe use a channel. Ideally find a way that can eliminate DiscardConsumeFuncs.
+func XwriteFile(pathName string, reader io.Reader, length uint32) error {
+	file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return errors.Wrap(err, "failed to create " + pathName)
+	}
+	defer file.Close()
+	if _, err := io.CopyN(file, reader, int64(length)); err != nil {
+		return errors.Wrap(err, "failed to write " + pathName)
 	}
 	if err = file.Close(); err != nil {
 		return errors.Wrap(err, "failed to close " + pathName)

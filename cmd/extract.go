@@ -427,13 +427,6 @@ func writeJson(pathName string, value interface{}) error {
 }
 
 
-func writeBytes(pathName string, data []byte) error {
-	return writeFile(pathName, func(file io.Writer) error {
-		_, err := file.Write(data)
-		return err
-	})
-}
-
 func writeAttachment(pathName string, length uint32, bf *types.BackupFile) error {
 	return writeFile(pathName, func(file io.Writer) error {
 		return bf.DecryptAttachment(length, file)
@@ -447,23 +440,6 @@ func writeFile(pathName string, write func(w io.Writer) error) error {
 	}
 	defer file.Close()
 	if err := write(file); err != nil {
-		return errors.Wrap(err, "failed to write " + pathName)
-	}
-	if err = file.Close(); err != nil {
-		return errors.Wrap(err, "failed to close " + pathName)
-	}
-	return nil
-}
-
-// TODO: figure out how to combine with other Open/Write/Close code above.
-// Maybe use a channel. Ideally find a way that can eliminate DiscardConsumeFuncs.
-func XwriteFile(pathName string, reader io.Reader, length uint32) error {
-	file, err := os.OpenFile(pathName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-	if err != nil {
-		return errors.Wrap(err, "failed to create " + pathName)
-	}
-	defer file.Close()
-	if _, err := io.CopyN(file, reader, int64(length)); err != nil {
 		return errors.Wrap(err, "failed to write " + pathName)
 	}
 	if err = file.Close(); err != nil {

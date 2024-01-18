@@ -216,21 +216,6 @@ type ConsumeFuncs struct {
 	StatementFunc  func(*signal.SqlStatement) error
 }
 
-// frame attachments MUST be handled, even if discarded
-func DiscardConsumeFuncs(bf *BackupFile) ConsumeFuncs {
-	return ConsumeFuncs{
-		AttachmentFunc: func(a *signal.Attachment) error {
-			return bf.DecryptAttachment(a.GetLength(), nil)
-		},
-		AvatarFunc: func(a *signal.Avatar) error {
-			return bf.DecryptAttachment(a.GetLength(), nil)
-		},
-		StickerFunc: func(a *signal.Sticker) error {
-			return bf.DecryptAttachment(a.GetLength(), nil)
-		},
-	}
-}
-
 // Consume iterates over the backup file using the fields in the provided ConsumeFuncs. When a
 // BackupFrame is encountered, the matching function will run.
 //
@@ -245,19 +230,25 @@ func (bf *BackupFile) Consume(fns ConsumeFuncs) error {
 		length  uint32
 		f       *signal.BackupFrame
 		err     error
-		discard = DiscardConsumeFuncs(bf)
 	)
 
 	defer bf.Close()
 
+	// frame attachments MUST be handled, even if discarded
 	if fns.AttachmentFunc == nil {
-		fns.AttachmentFunc = discard.AttachmentFunc
+		fns.AttachmentFunc = func(a *signal.Attachment) error {
+			return bf.DecryptAttachment(a.GetLength(), nil)
+		}
 	}
 	if fns.AvatarFunc == nil {
-		fns.AvatarFunc = discard.AvatarFunc
+		fns.AvatarFunc = func(a *signal.Avatar) error {
+			return bf.DecryptAttachment(a.GetLength(), nil)
+		}
 	}
 	if fns.StickerFunc == nil {
-		fns.StickerFunc = discard.StickerFunc
+		fns.StickerFunc = func(a *signal.Sticker) error {
+			return bf.DecryptAttachment(a.GetLength(), nil)
+		}
 	}
 
 	for {

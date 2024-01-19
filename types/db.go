@@ -89,7 +89,7 @@ func (s *Schema) RowValues (row []*signal.SqlStatement_SqlParameter) []interface
 
 // Backups.proto declares IntegerParameter as uint64
 //   but there are values of -1 in the database.
-// We must treat all IntegerParameter as int64 to avoid errors during db.Exec
+// We must treat all IntegerParameter as int64 to avoid this error during db.Exec
 //   "sql: converting argument $32 type: uint64 values with high bit set are not supported"
 
 func signed(u *uint64) *int64 {

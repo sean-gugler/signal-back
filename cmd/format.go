@@ -299,11 +299,12 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 		smses.MMS = append(smses.MMS, mms)
 	}
 
-	for _, sms := range smses.SMS {
-		sms.Address = recipients[sms.RecipientID].Phone
+	for id, sms := range smses.SMS {
+		// range gives us COPIES; need to modify original
+		smses.SMS[id].Address = recipients[sms.RecipientID].Phone
 	}
-	for _, mms := range smses.MMS {
-		mms.Address = recipients[mms.RecipientID].Phone
+	for id, mms := range smses.MMS {
+		smses.MMS[id].Address = recipients[mms.RecipientID].Phone
 	}
 
 	smses.Count = len(smses.SMS)

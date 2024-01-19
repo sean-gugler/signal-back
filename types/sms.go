@@ -73,7 +73,7 @@ type SMSes struct {
 type SMS struct {
 	XMLName       xml.Name `xml:"sms"`
 	Protocol      *uint64  `xml:"protocol,attr"`       // optional
-	RecipientID   string   `xml:"recipient_id,attr"`   // optional
+	RecipientID   uint64   `xml:"recipient_id,attr"`   // required
 	Address       string   `xml:"address,attr"`        // required
 	Date          string   `xml:"date,attr"`           // required
 	Type          SMSType  `xml:"type,attr"`           // required
@@ -106,7 +106,7 @@ type MMS struct {
 	TrID         string    `xml:"tr_id,attr"`         // required
 	St           string    `xml:"st,attr"`            // required
 	MsgBox       uint64    `xml:"msg_box,attr"`       // required
-	RecipientID  string    `xml:"recipient_id,attr"`  // required
+	RecipientID  uint64    `xml:"recipient_id,attr"`  // required
 	Address      string    `xml:"address,attr"`       // required
 	MCls         string    `xml:"m_cls,attr"`         // required
 	DTm          string    `xml:"d_tm,attr"`          // required
@@ -179,11 +179,9 @@ func NewSMSFromStatement(stmt *signal.SqlStatement) (*SMS, error) {
 		Status:        int64(sms.Status),
 		DateSent:      sms.DateSent,
 		ReadableDate:  intToTime(sms.DateReceived),
+		RecipientID:   sms.RecipientID,
 	}
 
-	if sms.RecipientID != nil {
-		xml.RecipientID = *sms.RecipientID
-	}
 	if sms.Type != nil {
 		xml.Type = translateSMSType(*sms.Type)
 	}
@@ -232,6 +230,7 @@ func NewMMSFromStatement(stmt *signal.SqlStatement) (uint64, *MMS, error) {
 		RetrTxt:      "null",
 		MSize:        nil,
 		ReadableDate: *intToTime(mms.DateReceived),
+		RecipientID:  mms.RecipientID,
 	}
 
 	if mms.MessageType != nil {
@@ -257,9 +256,6 @@ func NewMMSFromStatement(stmt *signal.SqlStatement) (uint64, *MMS, error) {
 	}
 	if mms.TransactionID != nil {
 		xml.TrID = *mms.TransactionID
-	}
-	if mms.RecipientID != nil {
-		xml.RecipientID = *mms.RecipientID
 	}
 	if mms.Expiry != nil {
 		xml.Exp = strconv.FormatUint(*mms.Expiry, 10)
@@ -390,26 +386,15 @@ func intToTime(n *uint64) *string {
 
 func translateSMSType(t uint64) SMSType {
 	// Just get the lowest 5 bits, because everything else is masking.
-	// https://github.com/signalapp/Signal-Android/blob/master/src/org/thoughtcrime/securesms/database/MmsSmsColumns.java
+	// https://github.com/signalapp/Signal-Android/blob/main/app/src/main/java/org/thoughtcrime/securesms/database/MessageTypes.java
 	v := uint8(t) & 0x1F
 
+	if 1 <= v && v <= 18 {
+		return SMSInvalid
+	}
+	
 	switch v {
-	// STANDARD
-	case 1: // standard standard
-		return SMSReceived
-	case 2: // standard sent
-		return SMSSent
-	case 3: // standard draft
-		return SMSDraft
-	case 4: // standard outbox
-		return SMSOutbox
-	case 5: // standard failed
-		return SMSFailed
-	case 6: // standard queued
-		return SMSQueued
-
-		// SIGNAL
-	case 20: // signal received
+	case 20: // signal inbox
 		return SMSReceived
 	case 21: // signal outbox
 		return SMSOutbox

@@ -168,7 +168,7 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 
 // XML formats the backup into the same XML format as SMS Backup & Restore
 // uses. Layout described at their website
-// http://synctech.com.au/fields-in-xml-backup-files/
+// https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
 func XML(bf *types.BackupFile, out io.Writer) error {
 	type attachmentDetails struct {
 		Size uint64
@@ -184,7 +184,6 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 	mmsParts := map[uint64][]types.MMSPart{}
 
 	fns := types.ConsumeFuncs{
-		// Remove attachment, but keep metadata.
 		AttachmentFunc: func(a *signal.Attachment) error {
 			err := bf.DecryptAttachment(a.GetLength(), attachmentEncoder)
 			attachmentEncoder.Close()
@@ -193,7 +192,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 			}
 			attachments[*a.AttachmentId] = attachmentDetails{
 				Size: uint64(*a.Length),
-				Body: attachmentBuffer.String(),
+				// Body: attachmentBuffer.String(),   //DISABLED WHILE DEBUGGING
 			}
 			attachmentBuffer.Reset()
 			return nil
@@ -209,7 +208,6 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 				}
 			}()
 
-			// Only use SMS/MMS/recipient statements
 			if strings.HasPrefix(*s.Statement, "INSERT INTO recipient") {
 				id, recipient, err := types.NewRecipientFromStatement(s)
 				if err != nil {
@@ -223,7 +221,9 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 				if err != nil {
 					return errors.Wrap(err, "sms statement couldn't be generated")
 				}
-				smses.SMS = append(smses.SMS, *sms)
+				if sms.Type != types.SMSInvalid {
+					smses.SMS = append(smses.SMS, *sms)
+				}
 			}
 
 			if strings.HasPrefix(*s.Statement, "INSERT INTO mms") {
@@ -254,6 +254,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 		var messageSize uint64
 		parts, ok := mmsParts[id]
 		if ok {
+			// for i, part := range parts {
 			for i := 0; i < len(parts); i++ {
 				if attachment, ok := attachments[parts[i].UniqueID]; ok {
 					messageSize += attachment.Size
@@ -262,6 +263,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 			}
 		}
 		if mms.Body != nil && len(*mms.Body) > 0 {
+			// parts = append(parts, types.MMSPartBody(id, mms.Body))
 			parts = append(parts, types.MMSPart{
 				Seq:   0,
 				Ct:    "text/plain",
@@ -297,19 +299,11 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 		smses.MMS = append(smses.MMS, mms)
 	}
 
-	for id, sms := range smses.SMS {
-		recipientID, err := strconv.ParseUint(sms.RecipientID, 10, 64)
-		if err != nil {
-			panic(err)
-		}
-		smses.SMS[id].Address = recipients[recipientID].Phone
+	for _, sms := range smses.SMS {
+		sms.Address = recipients[sms.RecipientID].Phone
 	}
-	for id, mms := range smses.MMS {
-		recipientID, err := strconv.ParseUint(mms.RecipientID, 10, 64)
-		if err != nil {
-			panic(err)
-		}
-		smses.MMS[id].Address = recipients[recipientID].Phone
+	for _, mms := range smses.MMS {
+		mms.Address = recipients[mms.RecipientID].Phone
 	}
 
 	smses.Count = len(smses.SMS)

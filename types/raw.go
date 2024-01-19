@@ -207,14 +207,14 @@ func ParametersToRecipient(ps []*signal.SqlStatement_SqlParameter) *SQLRecipient
 		SystemDisplayName:      ps[17].StringParameter,
 		SystemPhotoURI:         ps[18].StringParameter,
 		SystemPhoneLabel:       ps[19].StringParameter,
-		SystemPhoneType:        ps[20].GetIntegerParameter(),
-		SystemContactURI:       ps[21].StringParameter,
-		ProfileKey:             ps[22].StringParameter,
-		SignalProfileName:      ps[23].StringParameter,
-		SignalProfileAvatar:    ps[24].StringParameter,
-		ProfileSharing:         ps[25].GetIntegerParameter(),
-		UnidentifiedAccessMode: ps[26].GetIntegerParameter(),
-		ForceSmsSelection:      ps[27].GetIntegerParameter(),
+		// SystemPhoneType:        ps[].GetIntegerParameter(),
+		SystemContactURI:       ps[20].StringParameter,
+		ProfileKey:             ps[21].StringParameter,
+		SignalProfileName:      ps[22].StringParameter,
+		SignalProfileAvatar:    ps[23].StringParameter,
+		ProfileSharing:         ps[24].GetIntegerParameter(),
+		UnidentifiedAccessMode: ps[25].GetIntegerParameter(),
+		ForceSmsSelection:      ps[26].GetIntegerParameter(),
 	}
 
 	return result
@@ -226,11 +226,12 @@ func ParametersToRecipient(ps []*signal.SqlStatement_SqlParameter) *SQLRecipient
 type SQLSMS struct {
 	ID                   uint64
 	ThreadID             *uint64
-	RecipientID          *string
+	RecipientID          uint64
 	AddressDeviceID      uint64 // default 1
 	Person               *uint64
 	DateReceived         *uint64
 	DateSent             *uint64
+	DateServer             *uint64
 	Protocol             uint64 // effectively default 0
 	Read                 uint64 // default 0
 	Status               uint64 // default -1
@@ -264,27 +265,28 @@ func ParametersToSMS(ps []*signal.SqlStatement_SqlParameter) *SQLSMS {
 	result := &SQLSMS{
 		ID:                   ps[0].GetIntegerParameter(),
 		ThreadID:             ps[1].IntegerParameter,
-		RecipientID:          ps[2].StringParameter,
+		RecipientID:          ps[2].GetIntegerParameter(), //address
 		AddressDeviceID:      ps[3].GetIntegerParameter(),
 		Person:               ps[4].IntegerParameter,
 		DateReceived:         ps[5].IntegerParameter,
 		DateSent:             ps[6].IntegerParameter,
-		Protocol:             ps[7].GetIntegerParameter(),
-		Read:                 ps[8].GetIntegerParameter(),
-		Status:               ps[9].GetIntegerParameter(),
-		Type:                 ps[10].IntegerParameter,
-		ReplyPathPresent:     ps[11].IntegerParameter,
-		DeliveryReceiptCount: ps[12].GetIntegerParameter(),
-		Subject:              ps[13].StringParameter,
-		Body:                 ps[14].StringParameter,
-		MismatchedIdentities: ps[15].StringParameter,
-		ServiceCenter:        ps[16].StringParameter,
-		SubscriptionID:       ps[17].GetIntegerParameter(),
-		ExpiresIn:            ps[18].GetIntegerParameter(),
-		ExpireStarted:        ps[19].GetIntegerParameter(),
-		Notified:             ps[20].GetIntegerParameter(),
-		ReadReceiptCount:     ps[21].GetIntegerParameter(),
-		//Unidentified:         ps[22].GetIntegerParameter(),
+		DateServer:           ps[7].IntegerParameter,
+		Protocol:             ps[8].GetIntegerParameter(),
+		Read:                 ps[9].GetIntegerParameter(),
+		Status:               ps[10].GetIntegerParameter(),
+		Type:                 ps[11].IntegerParameter,
+		ReplyPathPresent:     ps[12].IntegerParameter,
+		DeliveryReceiptCount: ps[13].GetIntegerParameter(),
+		Subject:              ps[14].StringParameter,
+		Body:                 ps[15].StringParameter,
+		MismatchedIdentities: ps[16].StringParameter,
+		ServiceCenter:        ps[17].StringParameter,
+		SubscriptionID:       ps[18].GetIntegerParameter(),
+		ExpiresIn:            ps[19].GetIntegerParameter(),
+		ExpireStarted:        ps[20].GetIntegerParameter(),
+		Notified:             ps[21].GetIntegerParameter(),
+		ReadReceiptCount:     ps[22].GetIntegerParameter(),
+		Unidentified:         ps[23].GetIntegerParameter(),
 	}
 
 	return result
@@ -308,7 +310,7 @@ type SQLMMS struct {
 	PartCount            *uint64
 	// CtT                  *string
 	ContentLocation      *string
-	RecipientID          *string
+	RecipientID          uint64
 	AddressDeviceID      *uint64
 	Expiry               *uint64
 	// MCls                 *string
@@ -330,7 +332,7 @@ type SQLMMS struct {
 	// DTm                  *uint64
 	DeliveryReceiptCount uint64  // default 0
 	MismatchedIdentities *string // default null
-	NetworkFailure       *string // default null
+	NetworkFailures       *string // default null
 	// DRpt                 *uint64
 	SubscriptionID       uint64 // default -1
 	ExpiresIn            uint64 // default 0
@@ -342,7 +344,7 @@ type SQLMMS struct {
 	QuoteBody            *string
 	QuoteAttachment      uint64 // default -1
 	QuoteMissing         uint64 // default 0
-	QuoteMentions        *[]byte // default null
+	QuoteMentions        []byte // default null
 	SharedContacts       *string
 	Unidentified         uint64 // default 0
 	LinkPreviews         *string
@@ -365,8 +367,7 @@ func StatementToMMS(sql *signal.SqlStatement) *SQLMMS {
 
 // ParametersToMMS converts a set of SQL parameters to a single MMS.
 func ParametersToMMS(ps []*signal.SqlStatement_SqlParameter) *SQLMMS {
-	// TODO: update to 49 ?
-	if len(ps) < 42 {
+	if len(ps) < 32 {
 		return nil
 	}
 
@@ -375,51 +376,35 @@ func ParametersToMMS(ps []*signal.SqlStatement_SqlParameter) *SQLMMS {
 		ThreadID:             ps[1].IntegerParameter,
 		DateSent:             ps[2].IntegerParameter,
 		DateReceived:         ps[3].IntegerParameter,
-		MessageBox:           ps[4].IntegerParameter,
-		Read:                 ps[5].GetIntegerParameter(),
-		// MID:                  ps[6].StringParameter,
-		// Sub:                  ps[7].StringParameter,
-		// SubCs:                ps[8].IntegerParameter,
-		Body:                 ps[9].StringParameter,
-		PartCount:            ps[10].IntegerParameter,
-		// CtT:                  ps[11].StringParameter,
-		ContentLocation:      ps[12].StringParameter,
-		RecipientID:          ps[13].StringParameter,
-		AddressDeviceID:      ps[14].IntegerParameter,
-		Expiry:               ps[15].IntegerParameter,
-		// MCls:                 ps[16].StringParameter,
-		MessageType:          ps[17].IntegerParameter,
-		// V:                    ps[18].IntegerParameter,
-		MessageSize:          ps[19].IntegerParameter,
-		// Pri:                  ps[20].IntegerParameter,
-		// Rr:                   ps[21].IntegerParameter,
-		// RptA:                 ps[22].IntegerParameter,
-		// RespSt:               ps[23].IntegerParameter,
-		Status:               ps[24].IntegerParameter,
-		TransactionID:        ps[25].StringParameter,
-		// RetrSt:               ps[26].IntegerParameter,
-		// RetrTxt:              ps[27].StringParameter,
-		// RetrTxtCs:            ps[28].IntegerParameter,
-		// ReadStatus:           ps[29].IntegerParameter,
-		// CtCls:                ps[30].IntegerParameter,
-		// RespTxt:              ps[31].StringParameter,
-		// DTm:                  ps[32].IntegerParameter,
-		DeliveryReceiptCount: ps[33].GetIntegerParameter(),
-		MismatchedIdentities: ps[34].StringParameter,
-		NetworkFailure:       ps[35].StringParameter,
-		// DRpt:                 ps[36].IntegerParameter,
-		SubscriptionID:       ps[37].GetIntegerParameter(),
-		ExpiresIn:            ps[38].GetIntegerParameter(),
-		ExpireStarted:        ps[39].GetIntegerParameter(),
-		Notified:             ps[40].GetIntegerParameter(),
-		ReadReceiptCount:     ps[41].GetIntegerParameter(),
-		//QuoteID:              ps[42].GetIntegerParameter(),
-		//QuoteAuthor:          ps[43].StringParameter,
-		//QuoteBody:            ps[44].StringParameter,
-		//QuoteAttachment:      ps[45].GetIntegerParameter(),
-		//QuoteMissing:         ps[46].GetIntegerParameter(),
-		//SharedContacts:       ps[47].StringParameter,
-		//Unidentified:         ps[48].GetIntegerParameter(),
+		DateServer:           ps[4].IntegerParameter,
+		MessageBox:           ps[5].IntegerParameter,
+		Read:                 ps[6].GetIntegerParameter(),
+		Body:                 ps[7].StringParameter,
+		PartCount:            ps[8].IntegerParameter,
+		ContentLocation:      ps[9].StringParameter,
+		RecipientID:          ps[10].GetIntegerParameter(), //Address
+		AddressDeviceID:      ps[11].IntegerParameter,
+		Expiry:               ps[12].IntegerParameter,
+		MessageType:          ps[13].IntegerParameter,
+		MessageSize:          ps[14].IntegerParameter,
+		Status:               ps[15].IntegerParameter,
+		TransactionID:        ps[16].StringParameter,
+		DeliveryReceiptCount: ps[17].GetIntegerParameter(),
+		MismatchedIdentities: ps[18].StringParameter,
+		NetworkFailures:      ps[19].StringParameter,
+		SubscriptionID:       ps[20].GetIntegerParameter(),
+		ExpiresIn:            ps[21].GetIntegerParameter(),
+		ExpireStarted:        ps[22].GetIntegerParameter(),
+		Notified:             ps[23].GetIntegerParameter(),
+		ReadReceiptCount:     ps[24].GetIntegerParameter(),
+		QuoteID:              ps[25].GetIntegerParameter(),
+		QuoteAuthor:          ps[26].StringParameter,
+		QuoteBody:            ps[27].StringParameter,
+		QuoteAttachment:      ps[28].GetIntegerParameter(),
+		QuoteMissing:         ps[29].GetIntegerParameter(),
+		QuoteMentions:        ps[30].GetBlobParameter(),
+		SharedContacts:       ps[31].StringParameter,
+		Unidentified:         ps[32].GetIntegerParameter(),
 	}
 
 	return result
@@ -442,7 +427,7 @@ type SQLPart struct {
 	CttS                 *uint64
 	CttT                 *string
 	encrypted            *uint64
-	TransferState        *uint64
+	PendingPush        *uint64
 	Data                 *string
 	Size                 *uint64
 	FileName             *string
@@ -473,8 +458,7 @@ func StatementToPart(sql *signal.SqlStatement) *SQLPart {
 
 // ParametersToPart converts a set of SQL parameters to a single part.
 func ParametersToPart(ps []*signal.SqlStatement_SqlParameter) *SQLPart {
-	// TODO: update to 35 ? 28 ?
-	if len(ps) < 25 {
+	if len(ps) < 34 {
 		return nil
 	}
 	return &SQLPart{
@@ -491,7 +475,7 @@ func ParametersToPart(ps []*signal.SqlStatement_SqlParameter) *SQLPart {
 		CttS:                 ps[10].IntegerParameter,
 		CttT:                 ps[11].StringParameter,
 		encrypted:            ps[12].IntegerParameter,
-		TransferState:        ps[13].IntegerParameter,
+		PendingPush:          ps[13].IntegerParameter,  //was TransferState
 		Data:                 ps[14].StringParameter,
 		Size:                 ps[15].IntegerParameter,
 		FileName:             ps[16].StringParameter,
@@ -503,15 +487,15 @@ func ParametersToPart(ps []*signal.SqlStatement_SqlParameter) *SQLPart {
 		VoiceNote:            ps[22].GetIntegerParameter(),
 		DataRandom:           ps[23].GetBlobParameter(),
 		ThumbnailRandom:      ps[24].GetBlobParameter(),
-		Quote:                ps[25].GetIntegerParameter(),
-		Width:                ps[26].GetIntegerParameter(),
-		Height:               ps[27].GetIntegerParameter(),
-		//Caption:              ps[28].StringParameter,
-		//StickerPackID			ps[29].StringParameter,
-		//StickerPackKey        ps[30].StringParameter,
-		//StickerID				ps[31].StringParameter,
-		//DataHash				ps[32].StringParameter,
-		//BlurHash				ps[33].StringParameter,
-		//TransformProperties	ps[34].StringParameter,
+		Width:                ps[25].GetIntegerParameter(),
+		Height:               ps[26].GetIntegerParameter(),
+		Quote:                ps[27].GetIntegerParameter(),
+		Caption:              ps[28].StringParameter,
+		StickerPackID:			ps[29].StringParameter,
+		StickerPackKey:        ps[30].StringParameter,
+		StickerID:				ps[31].IntegerParameter,
+		DataHash:				ps[32].StringParameter,
+		BlurHash:				ps[33].StringParameter,
+		TransformProperties:	ps[34].StringParameter,
 	}
 }

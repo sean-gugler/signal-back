@@ -74,11 +74,11 @@ type SMS struct {
 	XMLName       xml.Name `xml:"sms"`
 	Protocol      *uint64  `xml:"protocol,attr"`       // optional
 	RecipientID   uint64   `xml:"recipient_id,attr"`   // required
-	Address       string   `xml:"address,attr"`        // required
+	Address       *string   `xml:"address,attr"`        // required
 	Date          string   `xml:"date,attr"`           // required
 	Type          SMSType  `xml:"type,attr"`           // required
 	Subject       *string  `xml:"subject,attr"`        // optional
-	Body          string   `xml:"body,attr"`           // required
+	Body          *string   `xml:"body,attr"`           // required
 	TOA           *string  `xml:"toa,attr"`            // optional
 	SCTOA         *string  `xml:"sc_toa,attr"`         // optional
 	ServiceCenter *string  `xml:"service_center,attr"` // optional
@@ -87,7 +87,7 @@ type SMS struct {
 	Locked        *uint64  `xml:"locked,attr"`         // optional
 	DateSent      *uint64  `xml:"date_sent,attr"`      // optional
 	ReadableDate  *string  `xml:"readable_date,attr"`  // optional
-	ContactName   *uint64  `xml:"contact_name,attr"`   // optional
+	ContactName   *string  `xml:"contact_name,attr"`   // optional
 }
 
 // MMS represents a Multimedia Messaging Service record.
@@ -186,14 +186,14 @@ func NewSMSFromStatement(stmt *signal.SqlStatement) (*SMS, error) {
 		xml.Type = translateSMSType(*sms.Type)
 	}
 	if sms.Body != nil {
-		xml.Body = *sms.Body
+		xml.Body = sms.Body
 	}
 	if sms.DateReceived != nil {
 		xml.Date = strconv.FormatUint(*sms.DateReceived, 10)
 	}
-	if sms.Person != nil {
-		xml.ContactName = sms.Person
-	}
+	// if sms.Person != nil {
+		// xml.ContactName = sms.Person
+	// }
 
 	return &xml, nil
 }

@@ -301,7 +301,8 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 
 	for id, sms := range smses.SMS {
 		// range gives us COPIES; need to modify original
-		smses.SMS[id].Address = recipients[sms.RecipientID].Phone
+		s := recipients[sms.RecipientID].Phone
+		smses.SMS[id].Address = &s
 	}
 	for id, mms := range smses.MMS {
 		smses.MMS[id].Address = recipients[mms.RecipientID].Phone

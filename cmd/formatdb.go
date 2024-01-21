@@ -1,21 +1,24 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/csv"
+	// "bytes"
+	"database/sql"
+	// "encoding/base64"
+	// "encoding/csv"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"runtime/debug"
-	"strconv"
+	"reflect"
+	// "runtime/debug"
+	// "strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
-	"github.com/xeals/signal-back/signal"
+	// "github.com/xeals/signal-back/signal"
 	"github.com/xeals/signal-back/types"
 )
 
@@ -28,13 +31,8 @@ var FormatDB = cli.Command{
 	Flags: append([]cli.Flag{
 		&cli.StringFlag{
 			Name:  "format, f",
-			Usage: "output the backup as `FORMAT` (xml, csv, raw)",
+			Usage: "output messages as `FORMAT` (xml, csv, raw)",
 			Value: "xml",
-		},
-		&cli.StringFlag{
-			Name:  "message, m",
-			Usage: "format `TYPE` messages (sms, mms)",
-			Value: "sms",
 		},
 		&cli.StringFlag{
 			Name:  "output, o",
@@ -45,17 +43,19 @@ var FormatDB = cli.Command{
 		if c.Bool("verbose") {
 			log.SetOutput(os.Stderr)
 		} else {
-			log.SetOutput(ioutil.Discard)
-		}
-		if c.Args().Get(0) == "" {
-			return nil, errors.New("must specify a Signal backup file")
+			log.SetOutput(io.Discard)
 		}
 
-
-		bf, err := setup(c)
-		if err != nil {
-			return err
+		var (
+			db *sql.DB
+			err error
+		)
+		if dbfile := c.Args().Get(0); dbfile == "" {
+			return errors.New("must specify a Signal database file")
+		} else if db, err = sql.Open("sqlite", dbfile); err != nil {
+			return errors.Wrap(err, "cannot open database file")
 		}
+
 
 		var out io.Writer
 		if c.String("output") != "" {
@@ -76,14 +76,12 @@ var FormatDB = cli.Command{
 
 		switch strings.ToLower(c.String("format")) {
 		case "csv":
-			err = CSV_db(bf, strings.ToLower(c.String("message")), out)
+			err = CSV_db(db, strings.ToLower(c.String("message")), out)
 		case "xml":
-			err = XML_db(bf, out)
+			err = XML_db(db, out)
 		case "json":
-			// err = formatJSON(bf, out)
+			// err = JSON_db(db, out)
 			return errors.New("JSON is still TODO")
-		case "raw":
-			err = Raw(bf, out)
 		default:
 			return errors.Errorf("format %s not recognised", c.String("format"))
 		}
@@ -96,10 +94,11 @@ var FormatDB = cli.Command{
 }
 
 // JSON <undefined>
-func JSON(bf *types.BackupFile, out io.Writer) error {
+func JSON_db(db *sql.DB, out io.Writer) error {
 	return nil
 }
 
+/*
 func csvHeaders(body string) []string {
 	cols := strings.Split(body, ", ")
 	h := make([]string, 0, len(cols))
@@ -108,9 +107,15 @@ func csvHeaders(body string) []string {
 	}
 	return h
 }
+*/
 
 // CSV dumps the raw backup data into a comma-separated value format.
-func CSV(bf *types.BackupFile, message string, out io.Writer) error {
+func CSV_db(db *sql.DB, message string, out io.Writer) error {
+	if db == nil || message == "" {
+		return nil
+	}
+	return nil
+/*
 	ss := make([][]string, 0)
 	recipients := map[uint64]types.Recipient{}
 
@@ -146,10 +151,6 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 		},
 	}
 
-	if err := bf.Consume(fns); err != nil {
-		return err
-	}
-
 	for id, line := range ss {
 		recipientID, err := strconv.ParseUint(line[addressFieldIndex], 10, 64)
 		if err != nil {
@@ -172,14 +173,18 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 	}
 
 	w.Flush()
-
 	return errors.WithMessage(w.Error(), "unable to end CSV writer or something")
+*/
 }
 
 // XML formats the backup into the same XML format as SMS Backup & Restore
 // uses. Layout described at their website
 // http://synctech.com.au/fields-in-xml-backup-files/
-func XML(bf *types.BackupFile, out io.Writer) error {
+func XML_db(db *sql.DB, out io.Writer) error {
+	// recipients := map[uint64]types.Recipient{}
+	recipients := map[int64]*Recipient{}
+	smses := &types.SMSes{}
+/*
 	type attachmentDetails struct {
 		Size uint64
 		Body string
@@ -192,74 +197,46 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 	smses := &types.SMSes{}
 	mmses := map[uint64]types.MMS{}
 	mmsParts := map[uint64][]types.MMSPart{}
+*/
+	// rows, err := SelectStructFromTable(db, Part{}, "part")
 
-	fns := types.ConsumeFuncs{
-		// Remove attachment, but keep metadata.
-		AttachmentFunc: func(a *signal.Attachment) error {
-			err := bf.DecryptAttachment(a.GetLength(), attachmentEncoder)
-			attachmentEncoder.Close()
-			if err != nil {
-				return errors.Wrap(err, "unable to process attachment")
-			}
-			attachments[*a.AttachmentId] = attachmentDetails{
-				Size: uint64(*a.Length),
-				Body: attachmentBuffer.String(),
-			}
-			attachmentBuffer.Reset()
-			return nil
-		},
-		StatementFunc: func(s *signal.SqlStatement) error {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Println("Unexpected error:", r)
-					log.Printf("TEMP: statement is %+v\n", s)
-					log.Printf("TEMP: statement is %#v\n", s)
-					debug.PrintStack()
-					os.Exit(1)
-				}
-			}()
-
-			// Only use SMS/MMS/recipient statements
-			if strings.HasPrefix(*s.Statement, "INSERT INTO recipient") {
-				id, recipient, err := types.NewRecipientFromStatement(s)
-				if err != nil {
-					return errors.Wrap(err, "recipient statement couldn't be generated")
-				}
-				recipients[id] = *recipient
-			}
-
-			if strings.HasPrefix(*s.Statement, "INSERT INTO sms") {
-				sms, err := types.NewSMSFromStatement(s)
-				if err != nil {
-					return errors.Wrap(err, "sms statement couldn't be generated")
-				}
-				smses.SMS = append(smses.SMS, *sms)
-			}
-
-			if strings.HasPrefix(*s.Statement, "INSERT INTO mms") {
-				id, mms, err := types.NewMMSFromStatement(s)
-				if err != nil {
-					return errors.Wrap(err, "mms statement couldn't be generated")
-				}
-				mmses[id] = *mms
-			}
-
-			if strings.HasPrefix(*s.Statement, "INSERT INTO part") {
-				mmsId, part, err := types.NewPartFromStatement(s)
-				if err != nil {
-					return errors.Wrap(err, "mms parts couldn't be generated")
-				}
-				mmsParts[mmsId] = append(mmsParts[mmsId], *part)
-			}
-
-			return nil
-		},
+	rows, err := SelectStructFromTable(db, Recipient{}, "recipient")
+	if err != nil {
+		return errors.Wrap(err, "query test")
+	}
+	for _, row := range rows {
+		r := row.(*Recipient)
+		recipients[r.ID] = r
+		// xml := types.Recipient{
+			// Phone: recipient.Phone
+		// }
 	}
 
-	if err := bf.Consume(fns); err != nil {
-		return err
-	}
+	// rows, err = SelectStructFromTable(db, MMS{}, "mms")
 
+	rows, err = SelectStructFromTable(db, SMS{}, "sms")
+	if err != nil {
+		return errors.Wrap(err, "query test")
+	}
+	for _, row := range rows {
+		sms := row.(*SMS)
+		recipient := recipients[sms.Address]
+		xml := types.SMS{
+			Address: stringPtr(recipient.Phone),
+			ContactName: stringPtr(recipient.System_display_name),
+			// Date: strconv.FormatUint(*sms.Date, 10)
+			ReadableDate:  intToTime(&sms.Date),
+			Body: stringPtr(sms.Body),
+		}
+		if xml.ContactName == nil {
+			xml.ContactName = stringPtr(recipient.Signal_profile_name)
+		}
+
+		smses.SMS = append(smses.SMS, xml)
+		// log.Printf("%+v", *xml.Body)
+		// break
+	}
+/*
 	for id, mms := range mmses {
 		var messageSize uint64
 		parts, ok := mmsParts[id]
@@ -306,21 +283,14 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 		}
 		smses.MMS = append(smses.MMS, mms)
 	}
-
 	for id, sms := range smses.SMS {
-		recipientID, err := strconv.ParseUint(sms.RecipientID, 10, 64)
-		if err != nil {
-			panic(err)
-		}
-		smses.SMS[id].Address = recipients[recipientID].Phone
+		// range gives us COPIES; need to modify original
+		smses.SMS[id].Address = recipients[sms.RecipientID].Phone
 	}
 	for id, mms := range smses.MMS {
-		recipientID, err := strconv.ParseUint(mms.RecipientID, 10, 64)
-		if err != nil {
-			panic(err)
-		}
-		smses.MMS[id].Address = recipients[recipientID].Phone
+		smses.MMS[id].Address = recipients[mms.RecipientID].Phone
 	}
+*/
 
 	smses.Count = len(smses.SMS)
 	x, err := xml.MarshalIndent(smses, "", "  ")
@@ -335,15 +305,98 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 	return errors.WithMessage(w.Error(), "failed to write out XML")
 }
 
-// Raw performs an ever plainer dump than CSV, and is largely unusable for any purpose outside
-// debugging.
-func Raw(bf *types.BackupFile, out io.Writer) error {
-	fns := types.ConsumeFuncs{
-		DebugFunc: func(s string) error {
-			_, err := out.Write(append([]byte(s), '\n'))
-			return err
-		},
-	}
+type Recipient struct{
+	ID			int64
+	Phone		sql.NullString
+	Group_id				sql.NullString
+	System_display_name		sql.NullString
+	Signal_profile_name		sql.NullString
+	Last_profile_fetch		uint64
+}
 
-	return errors.WithMessage(bf.Consume(fns), "failed to write raw")
+type SMS struct{
+	ID			int64
+	Address		int64
+	Date		uint64
+	Body		sql.NullString
+}
+
+func stringPtr(ns sql.NullString) *string {
+	if ns.Valid {
+		return &ns.String
+	}
+	return nil
+}
+
+var sqlColumns = make(map[reflect.Type]string)
+
+func cachedFieldNames(typ reflect.Type) string {
+	fields, ok := sqlColumns[typ]
+	if !ok {
+		// Construct and cache query string
+		vf := reflect.VisibleFields(typ)
+		fields = strings.Join(names(vf), ", ")
+		sqlColumns[typ] = fields
+	}
+	return fields
+}
+
+func names(fields []reflect.StructField) []string {
+	s := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f.Name == "ID" {
+			// special case, exported struct members cannot begin with _
+			s = append(s, "_id")
+		} else {
+			s = append(s, strings.ToLower(f.Name))
+		}
+	}
+	return s
+}
+
+//TODO: upgrade project to support generics [T any]
+func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]interface{}, error) {
+	var result []interface{}
+
+	typ := reflect.TypeOf(record)
+	n := typ.NumField()
+
+	// Perform SELECT query
+	// fields := cachedFieldNames(typ)
+	// q := fmt.Sprintf("SELECT %s FROM %s", fields, table)
+	q := fmt.Sprintf("SELECT %s FROM %s", cachedFieldNames(typ), table)
+
+	rows, err := db.Query(q)
+	if err != nil {
+		return nil, errors.Wrap(err, q)
+	}
+	defer rows.Close()
+
+	// Scan rows into new array of same type as 'record'
+	for rows.Next() {
+		data := reflect.New(typ)
+		val := data.Elem()
+
+		I := make([]interface{}, n)
+		for i := 0; i < n; i++ {
+			I[i] = val.Field(i).Addr().Interface()
+		}
+
+		if err = rows.Scan(I...); err != nil {
+			return nil, errors.Wrap(err, "scan")
+		}
+
+		result = append(result, data.Interface())
+	}
+	return result, nil
+}
+
+//TODO: dedupe
+func intToTime(n *uint64) *string {
+	if n == nil {
+		return nil
+	}
+	unix := time.Unix(int64(*n)/1000, 0)
+	t := unix.Format("Jan 02, 2006 3:04:05 PM")
+	return &t
 }

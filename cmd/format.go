@@ -1,16 +1,16 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/base64"
+	// "bytes"
+	// "encoding/base64"
 	"encoding/csv"
-	"encoding/xml"
+	// "encoding/xml"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"runtime/debug"
-	"strconv"
+	// "runtime/debug"
+	// "strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -102,7 +102,7 @@ func csvHeaders(body string) []string {
 // CSV dumps the raw backup data into a comma-separated value format.
 func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 	ss := make([][]string, 0)
-	recipients := map[uint64]types.Recipient{}
+	// recipients := map[uint64]types.Recipient{}
 
 	var (
 		addressFieldIndex int
@@ -124,11 +124,11 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 					}
 				}
 			case strings.HasPrefix(stmt, "INSERT INTO recipient"):
-				id, recipient, err := types.NewRecipientFromStatement(s)
-				if err != nil {
-					return errors.Wrap(err, "recipient statement couldn't be generated")
-				}
-				recipients[id] = *recipient
+				// id, recipient, err := types.NewRecipientFromStatement(s)
+				// if err != nil {
+					// return errors.Wrap(err, "recipient statement couldn't be generated")
+				// }
+				// recipients[id] = *recipient
 			case strings.HasPrefix(stmt, insert):
 				ss = append(ss, types.StatementToStringArray(s))
 			}
@@ -141,11 +141,14 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 	}
 
 	for id, line := range ss {
+/*
 		recipientID, err := strconv.ParseUint(line[addressFieldIndex], 10, 64)
 		if err != nil {
 			panic(err)
 		}
 		phone := recipients[recipientID].Phone
+*/
+		phone := line[addressFieldIndex]
 
 		ss[id][addressFieldIndex] = phone
 	}
@@ -169,6 +172,10 @@ func CSV(bf *types.BackupFile, message string, out io.Writer) error {
 // XML formats the backup into the same XML format as SMS Backup & Restore
 // uses. Layout described at their website
 // https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
+func XML(*types.BackupFile, io.Writer) error {
+	return nil
+}
+/*
 func XML(bf *types.BackupFile, out io.Writer) error {
 	type attachmentDetails struct {
 		Size uint64
@@ -321,6 +328,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 	w.W(x)
 	return errors.WithMessage(w.Error(), "failed to write out XML")
 }
+*/
 
 // Raw performs an ever plainer dump than CSV, and is largely unusable for any purpose outside
 // debugging.

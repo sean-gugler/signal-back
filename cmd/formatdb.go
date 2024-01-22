@@ -14,12 +14,13 @@ import (
 	// "runtime/debug"
 	// "strconv"
 	"strings"
-	"time"
+	// "time"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	// "github.com/xeals/signal-back/signal"
 	"github.com/xeals/signal-back/types"
+	"github.com/xeals/signal-back/types/synctech"
 )
 
 // Format fulfils the `formatdb` subcommand.
@@ -78,7 +79,7 @@ var FormatDB = cli.Command{
 		case "csv":
 			err = CSV_db(db, strings.ToLower(c.String("message")), out)
 		case "xml":
-			err = XML_db(db, out)
+			err = Synctech(db, out)
 		case "json":
 			// err = JSON_db(db, out)
 			return errors.New("JSON is still TODO")
@@ -177,15 +178,10 @@ func CSV_db(db *sql.DB, message string, out io.Writer) error {
 */
 }
 
-// XML formats the backup into the same XML format as SMS Backup & Restore
-// uses. Layout described at their website
-// http://synctech.com.au/fields-in-xml-backup-files/
-func XML_db(db *sql.DB, out io.Writer) error {
-	// recipients := map[uint64]types.Recipient{}
-	recipients := map[int64]*Recipient{}
-	smses := &types.SMSes{}
-	mmses := map[int64]*types.MMS{}
-	mmsParts := map[int64][]*types.MMSPart{}
+// Synctech() formats the backup into an XML format compatible with
+// SMS Backup & Restore by SyncTech. Layout described at their website
+// https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
+func Synctech(db *sql.DB, out io.Writer) error {
 /*
 	type attachmentDetails struct {
 		Size uint64
@@ -195,81 +191,51 @@ func XML_db(db *sql.DB, out io.Writer) error {
 	var attachmentBuffer bytes.Buffer
 	attachmentEncoder := base64.NewEncoder(base64.StdEncoding, &attachmentBuffer)
 	attachments := map[uint64]attachmentDetails{}
-	recipients := map[uint64]types.Recipient{}
-	smses := &types.SMSes{}
-	mmses := map[uint64]types.MMS{}
-	mmsParts := map[uint64][]types.MMSPart{}
 */
-	rows, err := SelectStructFromTable(db, Part{}, "part")
+	recipients := map[int64]synctech.DbRecipient{}
+	smses := &synctech.SMSes{}
+	mmses := map[int64]synctech.MMS{}
+	mmsParts := map[int64][]synctech.MMSPart{}
+
+	rows, err := SelectStructFromTable(db, synctech.DbPart{}, "part")
 	if err != nil {
 		return errors.Wrap(err, "xml select part")
 	}
 	for _, row := range rows {
-		r := row.(*Part)
-		xml := types.MMSPart{
-			// Phone: recipient.Phone
-		}
-		mmsId := r.Mid
-		mmsParts[mmsId] = append(mmsParts[mmsId], &xml)
+		r := row.(*synctech.DbPart)
+		id, xml := synctech.NewPart(*r)
+		mmsParts[id] = append(mmsParts[id], xml)
 	}
 
-	rows, err = SelectStructFromTable(db, Recipient{}, "recipient")
+	rows, err = SelectStructFromTable(db, synctech.DbRecipient{}, "recipient")
 	if err != nil {
 		return errors.Wrap(err, "xml select recipient")
 	}
 	for _, row := range rows {
-		r := row.(*Recipient)
-		recipients[r.ID] = r
-		// xml := types.Recipient{
-			// Phone: recipient.Phone
-		// }
+		r := row.(*synctech.DbRecipient)
+		recipients[r.ID] = *r
 	}
 
-	rows, err = SelectStructFromTable(db, SMS{}, "sms")
+	rows, err = SelectStructFromTable(db, synctech.DbSMS{}, "sms")
 	if err != nil {
 		return errors.Wrap(err, "xml select sms")
 	}
 	for _, row := range rows {
-		sms := row.(*SMS)
+		sms := row.(*synctech.DbSMS)
 		recipient := recipients[sms.Address]
-		xml := types.SMS{
-			Address: stringPtr(recipient.Phone),
-			ContactName: stringPtr(recipient.System_display_name),
-			// Date: strconv.FormatUint(*sms.Date, 10)
-			ReadableDate:  intToTime(&sms.Date),
-			Body: stringPtr(sms.Body),
-		}
-		if xml.ContactName == nil {
-			xml.ContactName = stringPtr(recipient.Signal_profile_name)
-		}
-
-		smses.SMS = append(smses.SMS, xml) //TODO: &xml
+		xml := synctech.NewSMS(*sms, recipient)
+		smses.SMS = append(smses.SMS, xml)
 	}
 
-	rows, err = SelectStructFromTable(db, MMS{}, "mms")
+	rows, err = SelectStructFromTable(db, synctech.DbMMS{}, "mms")
 	if err != nil {
 		return errors.Wrap(err, "xml select mms")
 	}
 	for _, row := range rows {
-		mms := row.(*MMS)
+		mms := row.(*synctech.DbMMS)
 		recipient := recipients[mms.Address]
-		xml := types.MMS{
-			Address: stringPtr(recipient.Phone),
-			ContactName: stringPtr(recipient.System_display_name),
-			Read: mms.Read,
-			MCls:         "personal",
-			CtT:          "application/vnd.wap.multipart.related",
-			CtL: stringPtr(mms.Ct_l),
-			ReadableDate: *intToTime(&mms.Date_received),
-			Body: stringPtr(mms.Body),
-			TrID: stringPtr(mms.Tr_id),
-			MId: mms.ID,
-		}
-		if xml.ContactName == nil {
-			xml.ContactName = stringPtr(recipient.Signal_profile_name)
-		}
-
-		mmses[mms.ID] = &xml
+		id, xml := synctech.NewMMS(*mms, recipient)
+		mmses[id] = xml
 	}
 
 
@@ -289,19 +255,7 @@ func XML_db(db *sql.DB, out io.Writer) error {
 			// }
 		}
 		if mms.Body != nil && len(*mms.Body) > 0 {
-			parts = append(parts, &types.MMSPart{
-				Seq:   0,
-				Ct:    "text/plain",
-				Name:  "null",
-				ChSet: types.CharsetUTF8,
-				Cd:    "null",
-				Fn:    "null",
-				CID:   "null",
-				Cl:    fmt.Sprintf("txt%06d.txt", id),
-				CttS:  "null",
-				CttT:  "null",
-				Text:  *mms.Body,
-			})
+			parts = append(parts, synctech.NewPartText(mms))
 			messageSize += uint64(len(*mms.Body))
 			if len(parts) == 1 {
 				mms.TextOnly = 1
@@ -313,25 +267,16 @@ func XML_db(db *sql.DB, out io.Writer) error {
 		mms.Parts = parts
 		mms.MSize = &messageSize
 		if mms.MType == nil {
-			if types.SetMMSMessageType(types.MMSSendReq, mms) != nil {
+			if synctech.SetMMSMessageType(synctech.MMSSendReq, &mms) != nil {
 				panic("logic error: this should never happen")
 			}
-			smses.MMS = append(smses.MMS, *mms)
-			if types.SetMMSMessageType(types.MMSRetrieveConf, mms) != nil {
+			smses.MMS = append(smses.MMS, mms)
+			if synctech.SetMMSMessageType(synctech.MMSRetrieveConf, &mms) != nil {
 				panic("logic error: this should never happen")
 			}
 		}
-		smses.MMS = append(smses.MMS, *mms)
+		smses.MMS = append(smses.MMS, mms)
 	}
-/*
-	for id, sms := range smses.SMS {
-		// range gives us COPIES; need to modify original
-		smses.SMS[id].Address = recipients[sms.RecipientID].Phone
-	}
-	for id, mms := range smses.MMS {
-		smses.MMS[id].Address = recipients[mms.RecipientID].Phone
-	}
-*/
 	log.Printf("%#v", smses.MMS[0])
 
 	smses.Count = len(smses.SMS)
@@ -347,43 +292,6 @@ func XML_db(db *sql.DB, out io.Writer) error {
 	return errors.WithMessage(w.Error(), "failed to write out XML")
 }
 
-type Recipient struct{
-	ID			int64
-	Phone		sql.NullString
-	Group_id				sql.NullString
-	System_display_name		sql.NullString
-	Signal_profile_name		sql.NullString
-	Last_profile_fetch		uint64
-}
-
-type SMS struct{
-	ID			int64
-	Address		int64
-	Date		uint64
-	Body		sql.NullString
-}
-
-type MMS struct{
-	ID			int64
-	Address		int64
-	Read		uint64
-	Ct_l		sql.NullString
-	Date_received		uint64
-	Body		sql.NullString
-	Tr_id		sql.NullString
-}
-
-type Part struct{
-	Mid			int64
-}
-
-func stringPtr(ns sql.NullString) *string {
-	if ns.Valid {
-		return &ns.String
-	}
-	return nil
-}
-
 var sqlColumns = make(map[reflect.Type]string)
 
 func cachedFieldNames(typ reflect.Type) string {
@@ -397,14 +305,31 @@ func cachedFieldNames(typ reflect.Type) string {
 	return fields
 }
 
+var snakeCase *strings.Replacer
+
+func makeReplacer() *strings.Replacer {
+	r := make([]string, 0, 26 * 2)
+	// for up,low := 'A','a'; low <= 'z'; up,low = up+1,low+1 {
+	for ch := 'a'; ch <= 'z'; ch++ {
+		CH := ch - 'a' + 'A'
+		r = append(r, string(CH))
+		r = append(r, "_" + string(ch))
+	}
+	return strings.NewReplacer(r...)
+}
+
 func names(fields []reflect.StructField) []string {
+	if snakeCase == nil {
+		snakeCase = makeReplacer()
+	}
 	s := make([]string, 0, len(fields))
 	for _, f := range fields {
 		if f.Name == "ID" {
 			// special case, exported struct members cannot begin with _
 			s = append(s, "_id")
 		} else {
-			s = append(s, strings.ToLower(f.Name))
+			s = append(s, snakeCase.Replace(f.Name)[1:])
+			// s = append(s, strings.ToLower(f.Name))
 		}
 	}
 	return s
@@ -445,14 +370,4 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 		result = append(result, data.Interface())
 	}
 	return result, nil
-}
-
-//TODO: dedupe
-func intToTime(n *uint64) *string {
-	if n == nil {
-		return nil
-	}
-	unix := time.Unix(int64(*n)/1000, 0)
-	t := unix.Format("Jan 02, 2006 3:04:05 PM")
-	return &t
 }

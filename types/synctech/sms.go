@@ -159,10 +159,15 @@ func NewSMS(sms DbSMS, recipient DbRecipient) SMS {
 	return xml
 }
 
+type MMSPartList struct {
+	XMLName      xml.Name  `xml:"parts"`
+	Parts        []MMSPart
+}
+
 // MMS represents a Multimedia Messaging Service record.
 type MMS struct {
 	XMLName      xml.Name  `xml:"mms"`
-	Parts        []MMSPart `xml:"parts"`
+	PartList     MMSPartList
 	Body         *string   `xml:"-"`
 	TextOnly     uint64    `xml:"text_only,attr"`     // optional
 	Sub          string    `xml:"sub,attr"`           // optional

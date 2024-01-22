@@ -264,7 +264,7 @@ func Synctech(db *sql.DB, out io.Writer) error {
 		if len(parts) == 0 {
 			continue
 		}
-		mms.Parts = parts
+		mms.PartList.Parts = parts
 		mms.MSize = &messageSize
 		if mms.MType == nil {
 			if synctech.SetMMSMessageType(synctech.MMSSendReq, &mms) != nil {

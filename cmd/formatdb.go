@@ -184,6 +184,8 @@ func XML_db(db *sql.DB, out io.Writer) error {
 	// recipients := map[uint64]types.Recipient{}
 	recipients := map[int64]*Recipient{}
 	smses := &types.SMSes{}
+	mmses := map[int64]*types.MMS{}
+	mmsParts := map[int64][]*types.MMSPart{}
 /*
 	type attachmentDetails struct {
 		Size uint64
@@ -198,11 +200,22 @@ func XML_db(db *sql.DB, out io.Writer) error {
 	mmses := map[uint64]types.MMS{}
 	mmsParts := map[uint64][]types.MMSPart{}
 */
-	// rows, err := SelectStructFromTable(db, Part{}, "part")
-
-	rows, err := SelectStructFromTable(db, Recipient{}, "recipient")
+	rows, err := SelectStructFromTable(db, Part{}, "part")
 	if err != nil {
-		return errors.Wrap(err, "query test")
+		return errors.Wrap(err, "xml select part")
+	}
+	for _, row := range rows {
+		r := row.(*Part)
+		xml := types.MMSPart{
+			// Phone: recipient.Phone
+		}
+		mmsId := r.Mid
+		mmsParts[mmsId] = append(mmsParts[mmsId], &xml)
+	}
+
+	rows, err = SelectStructFromTable(db, Recipient{}, "recipient")
+	if err != nil {
+		return errors.Wrap(err, "xml select recipient")
 	}
 	for _, row := range rows {
 		r := row.(*Recipient)
@@ -212,11 +225,9 @@ func XML_db(db *sql.DB, out io.Writer) error {
 		// }
 	}
 
-	// rows, err = SelectStructFromTable(db, MMS{}, "mms")
-
 	rows, err = SelectStructFromTable(db, SMS{}, "sms")
 	if err != nil {
-		return errors.Wrap(err, "query test")
+		return errors.Wrap(err, "xml select sms")
 	}
 	for _, row := range rows {
 		sms := row.(*SMS)
@@ -232,24 +243,53 @@ func XML_db(db *sql.DB, out io.Writer) error {
 			xml.ContactName = stringPtr(recipient.Signal_profile_name)
 		}
 
-		smses.SMS = append(smses.SMS, xml)
-		// log.Printf("%+v", *xml.Body)
-		// break
+		smses.SMS = append(smses.SMS, xml) //TODO: &xml
 	}
-/*
+
+	rows, err = SelectStructFromTable(db, MMS{}, "mms")
+	if err != nil {
+		return errors.Wrap(err, "xml select mms")
+	}
+	for _, row := range rows {
+		mms := row.(*MMS)
+		recipient := recipients[mms.Address]
+		xml := types.MMS{
+			Address: stringPtr(recipient.Phone),
+			ContactName: stringPtr(recipient.System_display_name),
+			Read: mms.Read,
+			MCls:         "personal",
+			CtT:          "application/vnd.wap.multipart.related",
+			CtL: stringPtr(mms.Ct_l),
+			ReadableDate: *intToTime(&mms.Date_received),
+			Body: stringPtr(mms.Body),
+			TrID: stringPtr(mms.Tr_id),
+			MId: mms.ID,
+		}
+		if xml.ContactName == nil {
+			xml.ContactName = stringPtr(recipient.Signal_profile_name)
+		}
+
+		mmses[mms.ID] = &xml
+	}
+
+
 	for id, mms := range mmses {
 		var messageSize uint64
 		parts, ok := mmsParts[id]
 		if ok {
-			for i := 0; i < len(parts); i++ {
-				if attachment, ok := attachments[parts[i].UniqueID]; ok {
-					messageSize += attachment.Size
-					parts[i].Data = &attachment.Body
-				}
-			}
+			//TODO
+			// for _, part := range parts {
+				// messageSize += part.Size
+				// messageSize += part.Data_size
+			// }
+			// for i := 0; i < len(parts); i++ {
+				// if read attachment file (parts.UniqueID]; ok {
+					// parts[i].Data = &attachment.Body
+				// }
+			// }
 		}
 		if mms.Body != nil && len(*mms.Body) > 0 {
-			parts = append(parts, types.MMSPart{
+			parts = append(parts, &types.MMSPart{
 				Seq:   0,
 				Ct:    "text/plain",
 				Name:  "null",
@@ -273,16 +313,17 @@ func XML_db(db *sql.DB, out io.Writer) error {
 		mms.Parts = parts
 		mms.MSize = &messageSize
 		if mms.MType == nil {
-			if types.SetMMSMessageType(types.MMSSendReq, &mms) != nil {
+			if types.SetMMSMessageType(types.MMSSendReq, mms) != nil {
 				panic("logic error: this should never happen")
 			}
-			smses.MMS = append(smses.MMS, mms)
-			if types.SetMMSMessageType(types.MMSRetrieveConf, &mms) != nil {
+			smses.MMS = append(smses.MMS, *mms)
+			if types.SetMMSMessageType(types.MMSRetrieveConf, mms) != nil {
 				panic("logic error: this should never happen")
 			}
 		}
-		smses.MMS = append(smses.MMS, mms)
+		smses.MMS = append(smses.MMS, *mms)
 	}
+/*
 	for id, sms := range smses.SMS {
 		// range gives us COPIES; need to modify original
 		smses.SMS[id].Address = recipients[sms.RecipientID].Phone
@@ -291,6 +332,7 @@ func XML_db(db *sql.DB, out io.Writer) error {
 		smses.MMS[id].Address = recipients[mms.RecipientID].Phone
 	}
 */
+	log.Printf("%#v", smses.MMS[0])
 
 	smses.Count = len(smses.SMS)
 	x, err := xml.MarshalIndent(smses, "", "  ")
@@ -319,6 +361,20 @@ type SMS struct{
 	Address		int64
 	Date		uint64
 	Body		sql.NullString
+}
+
+type MMS struct{
+	ID			int64
+	Address		int64
+	Read		uint64
+	Ct_l		sql.NullString
+	Date_received		uint64
+	Body		sql.NullString
+	Tr_id		sql.NullString
+}
+
+type Part struct{
+	Mid			int64
 }
 
 func stringPtr(ns sql.NullString) *string {

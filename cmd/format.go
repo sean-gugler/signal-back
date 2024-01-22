@@ -181,7 +181,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 	recipients := map[uint64]types.Recipient{}
 	smses := &types.SMSes{}
 	mmses := map[uint64]types.MMS{}
-	mmsParts := map[uint64][]types.MMSPart{}
+	mmsParts := map[uint64][]*types.MMSPart{}
 
 	fns := types.ConsumeFuncs{
 		AttachmentFunc: func(a *signal.Attachment) error {
@@ -239,7 +239,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 				if err != nil {
 					return errors.Wrap(err, "mms parts couldn't be generated")
 				}
-				mmsParts[mmsId] = append(mmsParts[mmsId], *part)
+				mmsParts[mmsId] = append(mmsParts[mmsId], part)
 			}
 
 			return nil
@@ -264,7 +264,7 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 		}
 		if mms.Body != nil && len(*mms.Body) > 0 {
 			// parts = append(parts, types.MMSPartBody(id, mms.Body))
-			parts = append(parts, types.MMSPart{
+			parts = append(parts, &types.MMSPart{
 				Seq:   0,
 				Ct:    "text/plain",
 				Name:  "null",
@@ -305,7 +305,8 @@ func XML(bf *types.BackupFile, out io.Writer) error {
 		smses.SMS[id].Address = &s
 	}
 	for id, mms := range smses.MMS {
-		smses.MMS[id].Address = recipients[mms.RecipientID].Phone
+		s := recipients[mms.RecipientID].Phone
+		smses.MMS[id].Address = &s
 	}
 
 	smses.Count = len(smses.SMS)

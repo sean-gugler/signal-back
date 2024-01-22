@@ -93,7 +93,7 @@ type SMS struct {
 // MMS represents a Multimedia Messaging Service record.
 type MMS struct {
 	XMLName      xml.Name  `xml:"mms"`
-	Parts        []MMSPart `xml:"parts"`
+	Parts        []*MMSPart `xml:"parts"`
 	Body         *string   `xml:"-"`
 	TextOnly     uint64    `xml:"text_only,attr"`     // optional
 	Sub          string    `xml:"sub,attr"`           // optional
@@ -102,19 +102,19 @@ type MMS struct {
 	CtCls        string    `xml:"ct_cls,attr"`        // required
 	SubCs        string    `xml:"sub_cs,attr"`        // required
 	Read         uint64    `xml:"read,attr"`          // required
-	CtL          string    `xml:"ct_l,attr"`          // required
-	TrID         string    `xml:"tr_id,attr"`         // required
+	CtL          *string    `xml:"ct_l,attr"`          // required
+	TrID         *string    `xml:"tr_id,attr"`         // required
 	St           string    `xml:"st,attr"`            // required
 	MsgBox       uint64    `xml:"msg_box,attr"`       // required
 	RecipientID  uint64    `xml:"recipient_id,attr"`  // required
-	Address      string    `xml:"address,attr"`       // required
+	Address      *string    `xml:"address,attr"`       // required
 	MCls         string    `xml:"m_cls,attr"`         // required
 	DTm          string    `xml:"d_tm,attr"`          // required
 	ReadStatus   string    `xml:"read_status,attr"`   // required
 	CtT          string    `xml:"ct_t,attr"`          // required
 	RetrTxtCs    string    `xml:"retr_txt_cs,attr"`   // required
 	DRpt         uint64    `xml:"d_rpt,attr"`         // required
-	MId          string    `xml:"m_id,attr"`          // required
+	MId          int64    `xml:"m_id,attr"`          // required
 	DateSent     uint64    `xml:"date_sent,attr"`     // required
 	Seen         uint64    `xml:"seen,attr"`          // required
 	MType        *uint64   `xml:"m_type,attr"`        // required
@@ -213,8 +213,8 @@ func NewMMSFromStatement(stmt *signal.SqlStatement) (uint64, *MMS, error) {
 		SubCs:        "null",
 		Body:         nil,
 		Read:         mms.Read,
-		CtL:          "null",
-		TrID:         "null",
+		// CtL:          "null",
+		// TrID:         "null",
 		St:           "null",
 		MCls:         "personal",
 		DTm:          "null",
@@ -252,10 +252,10 @@ func NewMMSFromStatement(stmt *signal.SqlStatement) (uint64, *MMS, error) {
 		xml.Body = mms.Body
 	}
 	if mms.ContentLocation != nil {
-		xml.CtL = *mms.ContentLocation
+		xml.CtL = mms.ContentLocation
 	}
 	if mms.TransactionID != nil {
-		xml.TrID = *mms.TransactionID
+		xml.TrID = mms.TransactionID
 	}
 	if mms.Expiry != nil {
 		xml.Exp = strconv.FormatUint(*mms.Expiry, 10)

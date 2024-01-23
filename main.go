@@ -21,7 +21,6 @@ func main() {
 	app.Version = version
 	app.Commands = []cli.Command{
 		cmd.Format,
-		cmd.FormatDB,
 		cmd.Analyse,
 		cmd.Extract,
 	}

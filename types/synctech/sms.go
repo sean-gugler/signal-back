@@ -271,7 +271,8 @@ func NewMMS(mms DbMMS, recipient DbRecipient) MMS {
 // MMSPart holds a data blob for an MMS.
 type MMSPart struct {
 	XMLName  xml.Name `xml:"part"`
-	UniqueID uint64   `xml:"-"`
+	DataSize uint64   `xml:"-"`
+	UniqueId uint64   `xml:"-"`
 	Seq      uint64   `xml:"seq,attr"`   // required
 	Ct       string   `xml:"ct,attr"`    // required
 	Name     *string   `xml:"name,attr"`  // required
@@ -306,7 +307,8 @@ type DbPart struct{
 // NewPart constructs an XML Part struct from a SQL record.
 func NewPart(part DbPart) (int64, MMSPart) {
 	xml := MMSPart{
-		UniqueID: part.UniqueId,
+		DataSize: part.DataSize,
+		UniqueId: part.UniqueId,
 		Seq:      uint64(part.Seq),
 		Ct:       part.Ct,
 		Name:     stringPtr(part.Name),

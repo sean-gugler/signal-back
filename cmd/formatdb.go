@@ -1,15 +1,16 @@
 package cmd
 
 import (
-	// "bytes"
+	"bytes"
 	"database/sql"
-	// "encoding/base64"
+	"encoding/base64"
 	// "encoding/csv"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	// "runtime/debug"
 	// "strconv"
@@ -49,14 +50,18 @@ var FormatDB = cli.Command{
 
 		var (
 			db *sql.DB
+			pathBase string
 			err error
 		)
 		if dbfile := c.Args().Get(0); dbfile == "" {
 			return errors.New("must specify a Signal database file")
 		} else if db, err = sql.Open("sqlite", dbfile); err != nil {
 			return errors.Wrap(err, "cannot open database file")
+		} else {
+			pathBase = filepath.Dir(dbfile)
 		}
 
+		pathAttachments := filepath.Join(pathBase, FolderAttachment)
 
 		var out io.Writer
 		if c.String("output") != "" {
@@ -79,7 +84,7 @@ var FormatDB = cli.Command{
 		case "csv":
 			err = CSV_db(db, strings.ToLower(c.String("message")), out)
 		case "xml":
-			err = Synctech(db, out)
+			err = Synctech(db, pathAttachments, out)
 		case "json":
 			// err = JSON_db(db, out)
 			return errors.New("JSON is still TODO")
@@ -181,7 +186,7 @@ func CSV_db(db *sql.DB, message string, out io.Writer) error {
 // Synctech() formats the backup into an XML format compatible with
 // SMS Backup & Restore by SyncTech. Layout described at their website
 // https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
-func Synctech(db *sql.DB, out io.Writer) error {
+func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 /*
 	type attachmentDetails struct {
 		Size uint64
@@ -244,16 +249,21 @@ func Synctech(db *sql.DB, out io.Writer) error {
 		id := mms.MId
 		parts, ok := mmsParts[id]
 		if ok {
-			//TODO
-			// for _, part := range parts {
-				// messageSize += part.Size
-				// messageSize += part.Data_size
-			// }
-			// for i := 0; i < len(parts); i++ {
-				// if read attachment file (parts.UniqueID]; ok {
-					// parts[i].Data = &attachment.Body
-				// }
-			// }
+			for i, part := range parts {
+				if size, data, err := ReadAttachment(pathAttachments, part.UniqueId); err != nil {
+					if err == os.ErrNotExist {
+						log.Printf("No attachment file found with id = %v", id)
+					} else {
+						return errors.Wrap(err, "read attachment")
+					}
+				} else {
+					if size != part.DataSize {
+						log.Printf("attachment (id %v) file size (%v) mismatches declared size (%v)", part.UniqueId, size, part.DataSize)
+					}
+					messageSize += size
+					parts[i].Data = &data
+				}
+			}
 		}
 		if mms.Body != nil && len(*mms.Body) > 0 {
 			parts = append(parts, synctech.NewPartText(mms))
@@ -278,7 +288,6 @@ func Synctech(db *sql.DB, out io.Writer) error {
 		}
 		smses.MMS = append(smses.MMS, mms)
 	}
-	log.Printf("%#v", smses.MMS[0])
 
 	smses.Count = len(smses.SMS)
 	x, err := xml.MarshalIndent(smses, "", "  ")
@@ -371,4 +380,50 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 		result = append(result, data.Interface())
 	}
 	return result, nil
+}
+
+func ReadAttachment(folder string, id uint64) (uint64, string, error) {
+	pattern := filepath.Join(folder, fmt.Sprintf("%v*", id))
+	// log.Printf("search attachment %v", pattern)
+	if matches, err := filepath.Glob(pattern); err != nil {
+		return 0, "", errors.Wrap(err, "find attachment file")
+	} else if len(matches) == 0 {
+		return 0, "", os.ErrNotExist
+	} else {
+		return readFileAsBase64(matches[0])
+	}
+}
+
+func readFileAsBase64(pathName string) (uint64, string, error) {
+	var buffer bytes.Buffer
+	encoder := base64.NewEncoder(base64.StdEncoding, &buffer)
+	defer encoder.Close()
+
+	copier := func(file io.Reader) (int64, error) {
+		return io.Copy(encoder, file)
+		// n, err := io.Copy(encoder, file)
+		// nRead = n
+		// return err
+	}
+	n, err := readFile(pathName, copier)
+	if err != nil {
+		return 0, "", err
+	}
+	return uint64(n), buffer.String(), nil
+}
+
+func readFile(pathName string, read func(w io.Reader) (int64, error)) (int64, error) {
+	file, err := os.OpenFile(pathName, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return 0, errors.Wrap(err, "readFile")
+	}
+	defer file.Close()
+	n, err := read(file)
+	if err != nil {
+		return 0, errors.Wrap(err, "readFile")
+	}
+	if err = file.Close(); err != nil {
+		return 0, errors.Wrap(err, "readFile")
+	}
+	return n, nil
 }

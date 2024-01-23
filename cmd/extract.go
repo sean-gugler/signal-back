@@ -21,10 +21,10 @@ import (
 )
 
 var filenameDB = "signal.db"
-var folderAttachment = "Attachments"
-var folderAvatar = "Avatars"
-var folderSticker = "Stickers"
-var folderSettings = "Settings"
+var FolderAttachment = "Attachments"
+var FolderAvatar = "Avatars"
+var FolderSticker = "Stickers"
+var FolderSettings = "Settings"
 var stickerInfoFilename = "pack_info.json"
 
 // Extract fulfils the `extract` subcommand.
@@ -73,22 +73,22 @@ var Extract = cli.Command{
 			}
 		}
 		if !c.Bool("attachments") {
-			if err := os.MkdirAll(path.Join(basePath, folderAttachment), 0755); err != nil {
+			if err := os.MkdirAll(path.Join(basePath, FolderAttachment), 0755); err != nil {
 				return errors.Wrap(err, "unable to create attachment directory")
 			}
 		}
 		if !c.Bool("avatars") {
-			if err := os.MkdirAll(path.Join(basePath, folderAvatar), 0755); err != nil {
+			if err := os.MkdirAll(path.Join(basePath, FolderAvatar), 0755); err != nil {
 				return errors.Wrap(err, "unable to create avatar directory")
 			}
 		}
 		if !c.Bool("stickers") {
-			if err := os.MkdirAll(path.Join(basePath, folderSticker), 0755); err != nil {
+			if err := os.MkdirAll(path.Join(basePath, FolderSticker), 0755); err != nil {
 				return errors.Wrap(err, "unable to create sticker directory")
 			}
 		}
 		if !c.Bool("settings") {
-			if err := os.MkdirAll(path.Join(basePath, folderSettings), 0755); err != nil {
+			if err := os.MkdirAll(path.Join(basePath, FolderSettings), 0755); err != nil {
 				return errors.Wrap(err, "unable to create settings directory")
 			}
 		}
@@ -274,7 +274,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				}
 			}
 
-			pathName := path.Join(base, folderAttachment, fileName)
+			pathName := path.Join(base, FolderAttachment, fileName)
 			if err := writeAttachment(pathName, a.GetLength(), bf); err != nil {
 				return errors.Wrap(err, "attachment")
 			} else if newName, err := fixFileExtension(pathName, mime); err != nil {
@@ -304,7 +304,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				mtime = info.fetchTime
 			}
 
-			pathName := path.Join(base, folderAvatar, fileName)
+			pathName := path.Join(base, FolderAvatar, fileName)
 			if err := writeAttachment(pathName, a.GetLength(), bf); err != nil {
 				return errors.Wrap(err, "avatar")
 			} else if newName, err := fixFileExtension(pathName, ""); err != nil {
@@ -321,7 +321,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			info, hasInfo := stickers[id]
 
 			fileName := fmt.Sprintf("%v", id)
-			packPath := path.Join(base, folderSticker)
+			packPath := path.Join(base, FolderSticker)
 
 			if !hasInfo {
 				log.Printf("sticker `%v` has no associated SQL entry", id)
@@ -404,7 +404,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	}
 
 	for fileName, kv := range prefs {
-		pathName := path.Join(base, folderSettings, fileName + ".json")
+		pathName := path.Join(base, FolderSettings, fileName + ".json")
 		if err := writeJson(pathName, kv); err != nil {
 			return errors.Wrap(err, "settings")
 		}

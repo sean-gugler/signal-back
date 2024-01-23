@@ -177,7 +177,7 @@ type MMS struct {
 	SubCs        string    `xml:"sub_cs,attr"`        // required
 	Read         uint64    `xml:"read,attr"`          // required
 	CtL          *string   `xml:"ct_l,attr"`          // optional
-	TrID         *string   `xml:"tr_id,attr"`         // optional
+	TrId         *string   `xml:"tr_id,attr"`         // optional
 	St           string    `xml:"st,attr"`            // required
 	MsgBox       uint64    `xml:"msg_box,attr"`       // required
 	RecipientID  uint64    `xml:"recipient_id,attr"`  // required
@@ -232,7 +232,7 @@ func NewMMS(mms DbMMS, recipient DbRecipient) MMS {
 		Body: stringPtr(mms.Body),
 		Read:         mms.Read,
 		CtL: stringPtr(mms.CtL),
-		TrID: stringPtr(mms.TrId),
+		TrId: stringPtr(mms.TrId),
 		St:           "null",
 		MCls:         "personal",
 		DTm:          "null",

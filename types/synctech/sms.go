@@ -328,22 +328,21 @@ func NewPart(part DbPart) (int64, MMSPart) {
 
 // NewPartText constructs an XML Part struct from an MMS body.
 func NewPartText(mms MMS) MMSPart {
+	null := "null"
 	chset := CharsetUTF8
 	cl := fmt.Sprintf("txt%06d.txt", mms.MId)
 
 	xml := MMSPart{
 		Seq:   0,
 		Ct:    "text/plain",
-		// Name:  "null",
+		Name:  &null,
 		ChSet: &chset,
-		// ChSet: CharsetUTF8,
-		// Cd:    "null",
-		// Fn:    "null",
-		// CID:   "null",
-		Cl: &cl,
-		// Cl:    fmt.Sprintf("txt%06d.txt", mms.ID),
-		// CttS:  "null",
-		// CttT:  "null",
+		Cd:    &null,
+		Fn:    &null,
+		CID:   &null,
+		Cl:    &cl,
+		CttS:  &null,
+		CttT:  &null,
 		Text:  *mms.Body,
 	}
 

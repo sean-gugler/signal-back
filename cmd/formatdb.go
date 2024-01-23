@@ -187,16 +187,6 @@ func CSV_db(db *sql.DB, message string, out io.Writer) error {
 // SMS Backup & Restore by SyncTech. Layout described at their website
 // https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
 func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
-/*
-	type attachmentDetails struct {
-		Size uint64
-		Body string
-	}
-
-	var attachmentBuffer bytes.Buffer
-	attachmentEncoder := base64.NewEncoder(base64.StdEncoding, &attachmentBuffer)
-	attachments := map[uint64]attachmentDetails{}
-*/
 	recipients := map[int64]synctech.DbRecipient{}
 	smses := &synctech.SMSes{}
 	mmses := []synctech.MMS{}
@@ -319,7 +309,6 @@ var snakeCase *strings.Replacer
 
 func makeReplacer() *strings.Replacer {
 	r := make([]string, 0, 26 * 2)
-	// for up,low := 'A','a'; low <= 'z'; up,low = up+1,low+1 {
 	for ch := 'a'; ch <= 'z'; ch++ {
 		CH := ch - 'a' + 'A'
 		r = append(r, string(CH))
@@ -339,7 +328,6 @@ func names(fields []reflect.StructField) []string {
 			s = append(s, "_id")
 		} else {
 			s = append(s, snakeCase.Replace(f.Name)[1:])
-			// s = append(s, strings.ToLower(f.Name))
 		}
 	}
 	return s
@@ -353,8 +341,6 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 	n := typ.NumField()
 
 	// Perform SELECT query
-	// fields := cachedFieldNames(typ)
-	// q := fmt.Sprintf("SELECT %s FROM %s", fields, table)
 	q := fmt.Sprintf("SELECT %s FROM %s", cachedFieldNames(typ), table)
 
 	rows, err := db.Query(q)
@@ -384,7 +370,6 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 
 func ReadAttachment(folder string, id uint64) (uint64, string, error) {
 	pattern := filepath.Join(folder, fmt.Sprintf("%v*", id))
-	// log.Printf("search attachment %v", pattern)
 	if matches, err := filepath.Glob(pattern); err != nil {
 		return 0, "", errors.Wrap(err, "find attachment file")
 	} else if len(matches) == 0 {
@@ -401,9 +386,6 @@ func readFileAsBase64(pathName string) (uint64, string, error) {
 
 	copier := func(file io.Reader) (int64, error) {
 		return io.Copy(encoder, file)
-		// n, err := io.Copy(encoder, file)
-		// nRead = n
-		// return err
 	}
 	n, err := readFile(pathName, copier)
 	if err != nil {

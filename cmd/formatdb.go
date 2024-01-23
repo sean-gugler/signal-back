@@ -194,8 +194,8 @@ func Synctech(db *sql.DB, out io.Writer) error {
 */
 	recipients := map[int64]synctech.DbRecipient{}
 	smses := &synctech.SMSes{}
-	mmses := map[int64]synctech.MMS{}
-	mmsParts := map[int64][]synctech.MMSPart{}
+	mmses := []synctech.MMS{}
+	mmsParts := map[int64][]synctech.MMSPart{} //key: message id
 
 	rows, err := SelectStructFromTable(db, synctech.DbPart{}, "part")
 	if err != nil {
@@ -203,8 +203,8 @@ func Synctech(db *sql.DB, out io.Writer) error {
 	}
 	for _, row := range rows {
 		r := row.(*synctech.DbPart)
-		id, xml := synctech.NewPart(*r)
-		mmsParts[id] = append(mmsParts[id], xml)
+		mid, xml := synctech.NewPart(*r)
+		mmsParts[mid] = append(mmsParts[mid], xml)
 	}
 
 	rows, err = SelectStructFromTable(db, synctech.DbRecipient{}, "recipient")
@@ -222,8 +222,8 @@ func Synctech(db *sql.DB, out io.Writer) error {
 	}
 	for _, row := range rows {
 		sms := row.(*synctech.DbSMS)
-		recipient := recipients[sms.Address]
-		xml := synctech.NewSMS(*sms, recipient)
+		rcp := recipients[sms.Address]
+		xml := synctech.NewSMS(*sms, rcp)
 		smses.SMS = append(smses.SMS, xml)
 	}
 
@@ -233,14 +233,15 @@ func Synctech(db *sql.DB, out io.Writer) error {
 	}
 	for _, row := range rows {
 		mms := row.(*synctech.DbMMS)
-		recipient := recipients[mms.Address]
-		id, xml := synctech.NewMMS(*mms, recipient)
-		mmses[id] = xml
+		rcp := recipients[mms.Address]
+		xml := synctech.NewMMS(*mms, rcp)
+		mmses = append(mmses, xml)
 	}
 
 
-	for id, mms := range mmses {
+	for _, mms := range mmses {
 		var messageSize uint64
+		id := mms.MId
 		parts, ok := mmsParts[id]
 		if ok {
 			//TODO

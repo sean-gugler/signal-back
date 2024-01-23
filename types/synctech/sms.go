@@ -221,7 +221,7 @@ type DbMMS struct{
 }
 
 // NewMMS constructs an XML MMS struct from a SQL record.
-func NewMMS(mms DbMMS, recipient DbRecipient) (int64, MMS) {
+func NewMMS(mms DbMMS, recipient DbRecipient) MMS {
 	xml := MMS{
 		TextOnly:     0,
 		Sub:          "null",
@@ -265,7 +265,7 @@ func NewMMS(mms DbMMS, recipient DbRecipient) (int64, MMS) {
 		log.Fatalf("%v\nplease report this issue, as well as (if possible) details about the MMS\nID = %d, body = %s\n\n%v", err, mms.ID, *body, mms)
 	}
 
-	return mms.ID, xml
+	return xml
 }
 
 // MMSPart holds a data blob for an MMS.

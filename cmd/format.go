@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/base64"
-	// "encoding/csv"
+	"encoding/csv"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -19,7 +19,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
-	// "github.com/xeals/signal-back/signal"
 	"github.com/xeals/signal-back/types"
 	"github.com/xeals/signal-back/types/synctech"
 )
@@ -37,8 +36,8 @@ var Format = cli.Command{
 			Value: "xml",
 		},
 		&cli.StringFlag{
-			Name:  "message, m",
-			Usage: "format `TYPE` messages (sms, mms)",
+			Name:  "table, t",
+			Usage: "for csv|json, choose which table to format (e.g. sms, mms, part)",
 			Value: "sms",
 		},
 		&cli.StringFlag{
@@ -87,7 +86,7 @@ var Format = cli.Command{
 
 		switch strings.ToLower(c.String("format")) {
 		case "csv":
-			err = CSV(db, strings.ToLower(c.String("message")), out)
+			err = CSV(db, strings.ToLower(c.String("table")), out)
 		case "xml":
 			err = Synctech(db, pathAttachments, out)
 		case "json":
@@ -109,69 +108,14 @@ func JSON(db *sql.DB, out io.Writer) error {
 	return nil
 }
 
-func csvHeaders(body string) []string {
-	cols := strings.Split(body, ", ")
-	h := make([]string, 0, len(cols))
-	for _, s := range cols {
-		h = append(h, s[:strings.IndexRune(s, ' ')])
-	}
-	return h
-}
-
-// CSV dumps the raw backup data into a comma-separated value format.
-func CSV(db *sql.DB, message string, out io.Writer) error {
-	if db == nil || message == "" {
+// CSV dumps an entire table into a comma-separated value format.
+func CSV(db *sql.DB, table string, out io.Writer) error {
+	if db == nil || table == "" {
 		return nil
 	}
-	return nil
-/*
-	ss := make([][]string, 0)
-	recipients := map[uint64]types.Recipient{}
-
-	var (
-		addressFieldIndex int
-		headers []string
-		create = fmt.Sprintf(`CREATE TABLE "%s" (`, message)
-		insert = "INSERT INTO " + message
-	)
-
-	fns := types.ConsumeFuncs{
-		StatementFunc: func(s *signal.SqlStatement) error {
-			stmt := *s.Statement
-			switch {
-			case strings.HasPrefix(stmt, create):
-				headers = csvHeaders(stmt[ len(create) : len(stmt)-1 ])
-				for i, field := range headers {
-					if field == "address" {
-						addressFieldIndex = i
-						break
-					}
-				}
-			case strings.HasPrefix(stmt, "INSERT INTO recipient"):
-				id, recipient, err := types.NewRecipientFromStatement(s)
-				if err != nil {
-					return errors.Wrap(err, "recipient statement couldn't be generated")
-				}
-				recipients[id] = *recipient
-			case strings.HasPrefix(stmt, insert):
-				ss = append(ss, types.StatementToStringArray(s))
-			}
-			return nil
-		},
-	}
-
-	if err := bf.Consume(fns); err != nil {
-		return err
-	}
-
-	for id, line := range ss {
-		recipientID, err := strconv.ParseUint(line[addressFieldIndex], 10, 64)
-		if err != nil {
-			panic(err)
-		}
-		phone := recipients[recipientID].Phone
-
-		ss[id][addressFieldIndex] = phone
+	headers, rows, err := SelectEntireTable(db, table)
+	if err != nil {
+		return errors.Wrap(err, "selecting table")
 	}
 
 	w := csv.NewWriter(out)
@@ -179,16 +123,17 @@ func CSV(db *sql.DB, message string, out io.Writer) error {
 		return errors.Wrap(err, "unable to write CSV headers")
 	}
 
-	for _, sms := range ss {
-		if err := w.Write(sms); err != nil {
-			return errors.Wrap(err, "unable to format CSV")
-		}
+	if err := w.WriteAll(rows); err != nil {
+		return errors.Wrap(err, "unable to format CSV")
 	}
 
 	w.Flush()
 
-	return errors.WithMessage(w.Error(), "unable to end CSV writer or something")
-*/
+	if err := w.Error(); err != nil {
+		return errors.Wrap(err, "writing CSV")
+	}
+
+	return nil
 }
 
 // Synctech() formats the backup into an XML format compatible with
@@ -374,6 +319,50 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 		result = append(result, data.Interface())
 	}
 	return result, nil
+}
+
+// func SelectEntireTable (db *sql.DB, table string) ([]string, []interface{}, error) {
+func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]string, result error) {
+	q := fmt.Sprintf("SELECT * FROM %s", table)
+
+	rows,err := db.Query(q)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, q)
+	}
+	defer rows.Close()
+
+	columnNames, err = rows.Columns()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, q)
+	}
+	n := len(columnNames)
+
+	for rows.Next() {
+		// Scan rows into new array
+		I := make([]interface{}, n)
+		for i := 0; i < n; i++ {
+			s := sql.NullString{}
+			I[i] = &s
+		}
+
+		if err = rows.Scan(I...); err != nil {
+			return nil, nil, errors.Wrap(err, "scan")
+		}
+
+		// Convert results into strings
+		ss := make([]string, 0, n)
+		for _, elt := range I {
+			ns := elt.(*sql.NullString)
+			if ns.Valid {
+				ss = append(ss, ns.String)
+			} else {
+				ss = append(ss, "")
+			}
+		}
+
+		records = append(records, ss)
+	}
+	return columnNames, records, nil
 }
 
 func ReadAttachment(folder string, id uint64) (uint64, string, error) {

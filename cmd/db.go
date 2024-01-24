@@ -1,0 +1,165 @@
+package cmd
+
+import (
+	"database/sql"
+	"fmt"
+	"reflect"
+	"strings"
+
+	"github.com/pkg/errors"
+)
+
+var snakeCase *strings.Replacer
+
+func makeReplacer() *strings.Replacer {
+	r := make([]string, 0, 26 * 2)
+	for ch := 'a'; ch <= 'z'; ch++ {
+		CH := ch - 'a' + 'A'
+		r = append(r, string(CH))
+		r = append(r, "_" + string(ch))
+	}
+	return strings.NewReplacer(r...)
+}
+
+// Convert names of struct members into snake_case
+func names(fields []reflect.StructField) []string {
+	if snakeCase == nil {
+		snakeCase = makeReplacer()
+	}
+	s := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f.Name == "ID" {
+			// special case, exported struct members cannot begin with _
+			s = append(s, "_id")
+		} else {
+			s = append(s, snakeCase.Replace(f.Name)[1:])
+		}
+	}
+	return s
+}
+
+
+var sqlColumns = make(map[reflect.Type]string)
+
+func cachedFieldNames(typ reflect.Type) string {
+	fields, ok := sqlColumns[typ]
+	if !ok {
+		// Construct and cache query string
+		vf := reflect.VisibleFields(typ)
+		fields = strings.Join(names(vf), ", ")
+		sqlColumns[typ] = fields
+	}
+	return fields
+}
+
+
+//TODO: upgrade project to support generics [T any]
+
+// Read all rows from table, but only columns that are named as struct members.
+// WordCase members are automatically matched with snake_case columns of the same name.
+func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]interface{}, error) {
+	var result []interface{}
+
+	typ := reflect.TypeOf(record)
+	n := typ.NumField()
+
+	// Perform SELECT query
+	q := fmt.Sprintf("SELECT %s FROM %s", cachedFieldNames(typ), table)
+
+	rows, err := db.Query(q)
+	if err != nil {
+		return nil, errors.Wrap(err, q)
+	}
+	defer rows.Close()
+
+	// Scan rows into new array of same type as 'record'
+	for rows.Next() {
+		data := reflect.New(typ)
+		val := data.Elem()
+
+		I := make([]interface{}, n)
+		for i := 0; i < n; i++ {
+			I[i] = val.Field(i).Addr().Interface()
+		}
+
+		if err = rows.Scan(I...); err != nil {
+			return nil, errors.Wrap(err, "scan")
+		}
+
+		result = append(result, data.Interface())
+	}
+	return result, nil
+}
+
+func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]interface{}, result error) {
+	q := fmt.Sprintf("SELECT * FROM %s", table)
+
+	rows,err := db.Query(q)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, q)
+	}
+	defer rows.Close()
+
+	// For convenience, return column names
+	// (useful for CSV header row and JSON field names)
+	columnNames, err = rows.Columns()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, q)
+	}
+
+	// Scan rows into generic arrays of type interface{}
+	for rows.Next() {
+		columns, err := rows.ColumnTypes()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, q)
+		}
+		cols := make([]interface{}, 0, len(columns))
+
+		for _, col := range columns {
+			// ScanType always chooses a pointer to a primitive data type,
+			// or 'nil' when the value is null. This is unfortunate because
+			// nil will cause Scan to panic. It would be nice if ScanType 
+			// always returned an appropriate sql.Null type instead. As a
+			// workaround, we substitute nil with a Null type (it doesn't
+			// matter which one, since we know Valid will always be false).
+			var p interface{} = &sql.NullBool{}
+			if typ := col.ScanType(); typ != nil {
+				p = reflect.New(typ).Interface()
+			}
+			cols = append(cols, p)
+		}
+		if err = rows.Scan(cols...); err != nil {
+			return nil, nil, errors.Wrap(err, "scan")
+		}
+
+		// Fixup null values back to nil
+		for i, col := range cols {
+			if _, ok := col.(*sql.NullBool); ok {
+				cols[i] = nil
+			}
+		}
+
+		records = append(records, cols)
+	}
+
+	return columnNames, records, nil
+}
+
+// Convert results from SelectEntireTable into strings
+func StringifyRows (vrows [][]interface{}) [][]string {
+	srows := [][]string{}
+	for _, vrow := range vrows {
+		ss := make([]string, 0, len(vrow))
+		for _, v := range vrow {
+			s := ""
+			if v != nil {
+				ptr := reflect.ValueOf(v)
+				s = fmt.Sprintf("%v", ptr.Elem())
+			}
+			ss = append(ss, s)
+		}
+
+		srows = append(srows, ss)
+	}
+	return srows
+}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/csv"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -84,14 +85,16 @@ var Format = cli.Command{
 			out = os.Stdout
 		}
 
+		table := strings.ToLower(c.String("table"))
+
 		switch strings.ToLower(c.String("format")) {
+		case "json":
+			err = JSON(db, table, out)
+			// return errors.New("JSON is still TODO")
 		case "csv":
-			err = CSV(db, strings.ToLower(c.String("table")), out)
+			err = CSV(db, table, out)
 		case "xml":
 			err = Synctech(db, pathAttachments, out)
-		case "json":
-			// err = JSON(db, out)
-			return errors.New("JSON is still TODO")
 		default:
 			return errors.Errorf("format %s not recognised", c.String("format"))
 		}
@@ -103,17 +106,40 @@ var Format = cli.Command{
 	},
 }
 
-// JSON <undefined>
-func JSON(db *sql.DB, out io.Writer) error {
+// JSON dumps an entire table into a JSON format.
+func JSON(db *sql.DB, table string, out io.Writer) error {
+	headers, rows, err := SelectEntireTable(db, table)
+	if err != nil {
+		return errors.Wrap(err, "selecting table")
+	}
+
+	n := len(headers)
+	records := make([]map[string]interface{}, 0, len(rows))
+
+	for _, row := range rows {
+		values := make(map[string]interface{}, n)
+		for i, name := range headers {
+			values[name] = row[i]
+		}
+		records = append(records, values)
+	}
+
+	data, err := json.MarshalIndent(records, "", "\t")
+	if err != nil {
+		return errors.Wrap(err, "json marshal error")
+	}
+	if _, err := out.Write(data); err != nil {
+		return errors.Wrap(err, "unable to write JSON data")
+	}
+
 	return nil
 }
 
 // CSV dumps an entire table into a comma-separated value format.
 func CSV(db *sql.DB, table string, out io.Writer) error {
-	if db == nil || table == "" {
-		return nil
-	}
-	headers, rows, err := SelectEntireTable(db, table)
+	headers, _, err := SelectEntireTable(db, table)
+	rows := [][]string{}
+	// headers, rows, err := "", "", &""
 	if err != nil {
 		return errors.Wrap(err, "selecting table")
 	}
@@ -322,7 +348,8 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 }
 
 // func SelectEntireTable (db *sql.DB, table string) ([]string, []interface{}, error) {
-func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]string, result error) {
+// func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]string, result error) {
+func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]interface{}, result error) {
 	q := fmt.Sprintf("SELECT * FROM %s", table)
 
 	rows,err := db.Query(q)
@@ -331,24 +358,41 @@ func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records
 	}
 	defer rows.Close()
 
-	columnNames, err = rows.Columns()
+	columns, err := rows.ColumnTypes()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, q)
 	}
-	n := len(columnNames)
+	n := len(columns)
+
+	columnNames = make([]string, 0, n)
+	for _, col := range columns {
+		columnNames = append(columnNames, col.Name())
+	}
 
 	for rows.Next() {
-		// Scan rows into new array
-		I := make([]interface{}, n)
-		for i := 0; i < n; i++ {
-			s := sql.NullString{}
-			I[i] = &s
+		cols := make([]interface{}, 0, n)
+		for i, col := range columns {
+			typ := col.ScanType()
+			if typ == nil {
+				p := sql.NullString{}
+				cols = append(cols, &p)
+			} else {
+				p := reflect.New(typ).Interface()
+				log.Printf("column %v %T %v", i, p, columnNames[i])
+				cols = append(cols, p)
+			}
 		}
-
-		if err = rows.Scan(I...); err != nil {
+		if err = rows.Scan(cols...); err != nil {
 			return nil, nil, errors.Wrap(err, "scan")
 		}
 
+		records = append(records, cols)
+	}
+
+	return columnNames, records, nil
+}
+
+/*
 		// Convert results into strings
 		ss := make([]string, 0, n)
 		for _, elt := range I {
@@ -362,8 +406,7 @@ func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records
 
 		records = append(records, ss)
 	}
-	return columnNames, records, nil
-}
+*/
 
 func ReadAttachment(folder string, id uint64) (uint64, string, error) {
 	pattern := filepath.Join(folder, fmt.Sprintf("%v*", id))

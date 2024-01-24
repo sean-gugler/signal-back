@@ -90,7 +90,6 @@ var Format = cli.Command{
 		switch strings.ToLower(c.String("format")) {
 		case "json":
 			err = JSON(db, table, out)
-			// return errors.New("JSON is still TODO")
 		case "csv":
 			err = CSV(db, table, out)
 		case "xml":
@@ -124,12 +123,11 @@ func JSON(db *sql.DB, table string, out io.Writer) error {
 		records = append(records, values)
 	}
 
-	data, err := json.MarshalIndent(records, "", "\t")
-	if err != nil {
-		return errors.Wrap(err, "json marshal error")
-	}
-	if _, err := out.Write(data); err != nil {
-		return errors.Wrap(err, "unable to write JSON data")
+	jsonEncoder := json.NewEncoder(out)
+	jsonEncoder.SetEscapeHTML(false)
+	jsonEncoder.SetIndent("", "\t")
+	if err := jsonEncoder.Encode(records); err != nil {
+		return errors.Wrap(err, "json encode")
 	}
 
 	return nil
@@ -358,32 +356,33 @@ func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records
 	}
 	defer rows.Close()
 
-	columns, err := rows.ColumnTypes()
+	columnNames, err = rows.Columns()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, q)
 	}
-	n := len(columns)
-
-	columnNames = make([]string, 0, n)
-	for _, col := range columns {
-		columnNames = append(columnNames, col.Name())
-	}
 
 	for rows.Next() {
-		cols := make([]interface{}, 0, n)
-		for i, col := range columns {
-			typ := col.ScanType()
-			if typ == nil {
-				p := sql.NullString{}
-				cols = append(cols, &p)
-			} else {
-				p := reflect.New(typ).Interface()
-				log.Printf("column %v %T %v", i, p, columnNames[i])
-				cols = append(cols, p)
+		columns, err := rows.ColumnTypes()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, q)
+		}
+		cols := make([]interface{}, 0, len(columns))
+
+		for _, col := range columns {
+			var p interface{} = &sql.NullBool{}
+			if typ := col.ScanType(); typ != nil {
+				p = reflect.New(typ).Interface()
 			}
+			cols = append(cols, p)
 		}
 		if err = rows.Scan(cols...); err != nil {
 			return nil, nil, errors.Wrap(err, "scan")
+		}
+
+		for i, col := range cols {
+			if _, ok := col.(*sql.NullBool); ok {
+				cols[i] = nil
+			}
 		}
 
 		records = append(records, cols)

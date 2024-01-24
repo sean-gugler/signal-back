@@ -135,9 +135,7 @@ func JSON(db *sql.DB, table string, out io.Writer) error {
 
 // CSV dumps an entire table into a comma-separated value format.
 func CSV(db *sql.DB, table string, out io.Writer) error {
-	headers, _, err := SelectEntireTable(db, table)
-	rows := [][]string{}
-	// headers, rows, err := "", "", &""
+	headers, rowsI, err := SelectEntireTable(db, table)
 	if err != nil {
 		return errors.Wrap(err, "selecting table")
 	}
@@ -147,6 +145,7 @@ func CSV(db *sql.DB, table string, out io.Writer) error {
 		return errors.Wrap(err, "unable to write CSV headers")
 	}
 
+	rows := StringifyRows(rowsI)
 	if err := w.WriteAll(rows); err != nil {
 		return errors.Wrap(err, "unable to format CSV")
 	}
@@ -345,8 +344,6 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 	return result, nil
 }
 
-// func SelectEntireTable (db *sql.DB, table string) ([]string, []interface{}, error) {
-// func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]string, result error) {
 func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]interface{}, result error) {
 	q := fmt.Sprintf("SELECT * FROM %s", table)
 
@@ -391,21 +388,24 @@ func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records
 	return columnNames, records, nil
 }
 
-/*
+func StringifyRows (vrows [][]interface{}) [][]string {
+	srows := [][]string{}
+	for _, vrow := range vrows {
 		// Convert results into strings
-		ss := make([]string, 0, n)
-		for _, elt := range I {
-			ns := elt.(*sql.NullString)
-			if ns.Valid {
-				ss = append(ss, ns.String)
-			} else {
-				ss = append(ss, "")
+		ss := make([]string, 0, len(vrow))
+		for _, v := range vrow {
+			s := ""
+			if v != nil {
+				ptr := reflect.ValueOf(v)
+				s = fmt.Sprintf("%v", ptr.Elem())
 			}
+			ss = append(ss, s)
 		}
 
-		records = append(records, ss)
+		srows = append(srows, ss)
 	}
-*/
+	return srows
+}
 
 func ReadAttachment(folder string, id uint64) (uint64, string, error) {
 	pattern := filepath.Join(folder, fmt.Sprintf("%v*", id))

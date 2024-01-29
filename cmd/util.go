@@ -97,6 +97,7 @@ func readPassword(c *cli.Context) (string, error) {
 		if err != nil {
 			return "", errors.Wrap(err, "unable to read from stdin")
 		}
+		fmt.Fprint(os.Stderr, "\n")
 		pass = string(raw)
 	}
 	return pass, nil

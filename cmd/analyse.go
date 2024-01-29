@@ -40,6 +40,7 @@ var Analyse = cli.Command{
 			return err
 		}
 
+		fmt.Println("Analysing...")
 		a, err := AnalyseFile(bf, c)
 		if err != nil {
 			return errors.WithMessage(err, "failed to analyse file")

@@ -516,6 +516,7 @@ func fixFileExtension(pathName string, mimeType string) (string, error) {
 
 	// If existing extension is already correct, do not double-append
 	givenExt := filepath.Ext(pathName)
+	givenExt = strings.ToLower(givenExt)
 	if givenExt == ".jpeg" {
 		givenExt = ".jpg"
 	}

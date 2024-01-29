@@ -17,7 +17,6 @@ import (
 	"github.com/urfave/cli"
 	"github.com/xeals/signal-back/signal"
 	"github.com/xeals/signal-back/types"
-	_ "modernc.org/sqlite"
 )
 
 var filenameDB = "signal.db"

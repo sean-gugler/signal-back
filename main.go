@@ -7,6 +7,7 @@ import (
 	"github.com/urfave/cli"
 	"github.com/xeals/signal-back/cmd"
 	"github.com/xeals/signal-back/types"
+	_ "modernc.org/sqlite"
 )
 
 var version = "devel"

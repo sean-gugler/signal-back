@@ -8,7 +8,7 @@ In version 4.17.5, the Signal Android app introduced encrypted backups. While th
 
 # Usage
 
-Either [build from source](#building-from-source) or download a [pre-built binary](https://github.com/xeals/signal-back/releases) and put the executable somewhere you can find it.
+Either [build from source](#building-from-source) or download a [pre-built binary](https://github.com/sean-gugler/signal-back/releases) and put the executable somewhere you can find it.
 
 ```
 Usage: signal-back COMMAND [OPTION...] BACKUPFILE
@@ -40,7 +40,7 @@ You can enter the password in the interactive dialog such as `12345 12345 12345 
 
 # Example usage
 
-Download whichever binary suits your system from the [releases page](https://github.com/xeals/signal-back/releases); Windows, Mac OS (`darwin`), or Linux, and 32-bit (`386`) or 64-bit (`amd64`). Checksums are provided to verify file integrity.
+Download whichever binary suits your system from the [releases page](https://github.com/sean-gugler/signal-back/releases); Windows, Mac OS (`darwin`), or Linux, and 32-bit (`386`) or 64-bit (`amd64`). Checksums are provided to verify file integrity.
 
 Find where you downloaded the file and open an interactive shell (Command Prompt, Terminal.app, gnome-terminal, etc.). Make sure your `signal-XXX.backup` file is in the same folder.
 
@@ -87,13 +87,13 @@ Everything will be in the `output` folder where you ran the command. Note that s
 Building requires [Go](https://golang.org) and [dep](https://github.com/golang/dep). If you don't have one (or both) of these tools, instructions should be easy to find. After you've initialised everything:
 
 ```
-$ git clone https://github.com/xeals/signal-back $GOPATH/src/github.com/xeals/signal-back
+$ git clone https://github.com/sean-gugler/signal-back $GOPATH/src/github.com/sean-gugler/signal-back
 $ cd $GOPATH/src/github.com/xeals/signal-back
 $ dep ensure
 $ go build .
 ```
 
-You can also just use `go get github.com/xeals/signal-back`, but I provide no guarantees on dependency compatibility.
+You can also just use `go get github.com/sean-gugler/signal-back`, but I provide no guarantees on dependency compatibility.
 
 # Todo list
 

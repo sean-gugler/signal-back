@@ -277,7 +277,8 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				}
 			}
 
-			pathName := path.Join(base, FolderAttachment, fileName)
+			safeFileName := escapeFileName(fileName)
+			pathName := path.Join(base, FolderAttachment, safeFileName)
 			if err := writeAttachment(pathName, a.GetLength(), bf); err != nil {
 				return errors.Wrap(err, "attachment")
 			} else if newName, err := fixFileExtension(pathName, mime); err != nil {
@@ -460,6 +461,20 @@ func setFileTimestamp(pathName string, milliseconds int64) error {
 		}
 	}
 	return nil
+}
+
+// Convert illegal filename characters into url-style %XX substrings
+func escapeFileName(fileName string) (string) {
+	const illegal = `<>:"/\|?*`
+	s := ""
+	for _, c := range fileName {
+		if c < ' ' || strings.IndexRune(illegal, c) >= 0 {
+			s += fmt.Sprintf("%%%02X", c)
+		} else {
+			s += string(c)
+		}
+	}
+	return s
 }
 
 func fixFileExtension(pathName string, mimeType string) (string, error) {

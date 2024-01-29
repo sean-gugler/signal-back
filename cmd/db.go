@@ -12,7 +12,7 @@ import (
 var snakeCase *strings.Replacer
 
 func makeReplacer() *strings.Replacer {
-	r := make([]string, 0, 26 * 2)
+	r := make([]string, 0, 26*2)
 	for ch := 'a'; ch <= 'z'; ch++ {
 		CH := ch - 'a' + 'A'
 		r = append(r, string(CH))
@@ -38,7 +38,6 @@ func names(fields []reflect.StructField) []string {
 	return s
 }
 
-
 var sqlColumns = make(map[reflect.Type]string)
 
 func cachedFieldNames(typ reflect.Type) string {
@@ -52,12 +51,11 @@ func cachedFieldNames(typ reflect.Type) string {
 	return fields
 }
 
-
 //TODO: upgrade project to support generics [T any]
 
 // Read all rows from table, but only columns that are named as struct members.
 // WordCase members are automatically matched with snake_case columns of the same name.
-func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]interface{}, error) {
+func SelectStructFromTable(db *sql.DB, record interface{}, table string) ([]interface{}, error) {
 	var result []interface{}
 
 	typ := reflect.TypeOf(record)
@@ -91,10 +89,10 @@ func SelectStructFromTable (db *sql.DB, record interface{}, table string) ([]int
 	return result, nil
 }
 
-func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records [][]interface{}, result error) {
+func SelectEntireTable(db *sql.DB, table string) (columnNames []string, records [][]interface{}, result error) {
 	q := fmt.Sprintf("SELECT * FROM %s", table)
 
-	rows,err := db.Query(q)
+	rows, err := db.Query(q)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, q)
 	}
@@ -118,7 +116,7 @@ func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records
 		for _, col := range columns {
 			// ScanType always chooses a pointer to a primitive data type,
 			// or 'nil' when the value is null. This is unfortunate because
-			// nil will cause Scan to panic. It would be nice if ScanType 
+			// nil will cause Scan to panic. It would be nice if ScanType
 			// always returned an appropriate sql.Null type instead. As a
 			// workaround, we substitute nil with a Null type (it doesn't
 			// matter which one, since we know Valid will always be false).
@@ -146,7 +144,7 @@ func SelectEntireTable (db *sql.DB, table string) (columnNames []string, records
 }
 
 // Convert results from SelectEntireTable into strings
-func StringifyRows (vrows [][]interface{}) [][]string {
+func StringifyRows(vrows [][]interface{}) [][]string {
 	srows := [][]string{}
 	for _, vrow := range vrows {
 		ss := make([]string, 0, len(vrow))

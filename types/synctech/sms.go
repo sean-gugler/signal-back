@@ -64,13 +64,13 @@ type Recipient struct {
 }
 
 // Recipient fields as stored in signal database (relevant subset)
-type DbRecipient struct{
-	ID			int64
-	Phone		sql.NullString
-	GroupId				sql.NullString
-	SystemDisplayName		sql.NullString
-	SignalProfileName		sql.NullString
-	LastProfileFetch		uint64
+type DbRecipient struct {
+	ID                int64
+	Phone             sql.NullString
+	GroupId           sql.NullString
+	SystemDisplayName sql.NullString
+	SignalProfileName sql.NullString
+	LastProfileFetch  uint64
 }
 
 // NewRecipient constructs an XML recipient struct from a SQL record.
@@ -96,57 +96,57 @@ type SMSes struct {
 
 // SMS represents a Short Message Service record.
 type SMS struct {
-	XMLName       xml.Name `xml:"sms"`
-	Protocol      *uint64  `xml:"protocol,attr"`       // required
+	XMLName  xml.Name `xml:"sms"`
+	Protocol *uint64  `xml:"protocol,attr"` // required
 	// RecipientID   uint64   `xml:"recipient_id,attr"`   // required
-	Address       *string  `xml:"address,attr"`        // optional
-	Date          string   `xml:"date,attr"`           // required
-	Type          SMSType  `xml:"type,attr"`           // required
-	Subject       *string  `xml:"subject,attr"`        // optional
-	Body          *string  `xml:"body,attr"`           // optional
-	TOA           *string  `xml:"toa,attr"`            // optional
-	SCTOA         *string  `xml:"sc_toa,attr"`         // optional
-	ServiceCenter *string  `xml:"service_center,attr"` // optional
+	Address        *string `xml:"address,attr"`        // optional
+	Date           string  `xml:"date,attr"`           // required
+	Type           SMSType `xml:"type,attr"`           // required
+	Subject        *string `xml:"subject,attr"`        // optional
+	Body           *string `xml:"body,attr"`           // optional
+	TOA            *string `xml:"toa,attr"`            // optional
+	SCTOA          *string `xml:"sc_toa,attr"`         // optional
+	ServiceCenter  *string `xml:"service_center,attr"` // optional
 	SubscriptionId int64   `xml:"sub_id,attr"`         // optional
-	Read          int64   `xml:"read,attr"`           // required
-	Status        int64    `xml:"status,attr"`         // required
-	Locked        *uint64  `xml:"locked,attr"`         // optional
-	DateSent      *uint64  `xml:"date_sent,attr"`      // optional
-	ReadableDate  *string  `xml:"readable_date,attr"`  // optional
-	ContactName   *string  `xml:"contact_name,attr"`   // optional
+	Read           int64   `xml:"read,attr"`           // required
+	Status         int64   `xml:"status,attr"`         // required
+	Locked         *uint64 `xml:"locked,attr"`         // optional
+	DateSent       *uint64 `xml:"date_sent,attr"`      // optional
+	ReadableDate   *string `xml:"readable_date,attr"`  // optional
+	ContactName    *string `xml:"contact_name,attr"`   // optional
 }
 
 // SMS fields as stored in signal database (relevant subset)
 type DbSMS struct {
-	ID			int64
-	Address		int64
-	Date		uint64
-	DateSent		uint64
-	Protocol	sql.NullInt64
-	Read	int64
-	Status	int64
-	Type	int64
-	Subject		sql.NullString
-	Body		sql.NullString
-	ServiceCenter		sql.NullString
-	SubscriptionId	int64
+	ID             int64
+	Address        int64
+	Date           uint64
+	DateSent       uint64
+	Protocol       sql.NullInt64
+	Read           int64
+	Status         int64
+	Type           int64
+	Subject        sql.NullString
+	Body           sql.NullString
+	ServiceCenter  sql.NullString
+	SubscriptionId int64
 }
 
 // NewSMS constructs an XML SMS struct from a SQL record.
 func NewSMS(sms DbSMS, recipient DbRecipient) SMS {
 	xml := SMS{
-		Address:       stringPtr(recipient.Phone),
-		Date: strconv.FormatUint(sms.Date, 10),
-		Type:          translateSMSType(sms.Type),
-		Subject:       stringPtr(sms.Subject),
-		Body:          stringPtr(sms.Body),
-		ServiceCenter: stringPtr(sms.ServiceCenter),
+		Address:        stringPtr(recipient.Phone),
+		Date:           strconv.FormatUint(sms.Date, 10),
+		Type:           translateSMSType(sms.Type),
+		Subject:        stringPtr(sms.Subject),
+		Body:           stringPtr(sms.Body),
+		ServiceCenter:  stringPtr(sms.ServiceCenter),
 		SubscriptionId: sms.SubscriptionId,
-		Read:          sms.Read,
-		Status:        sms.Status,
-		DateSent:      &sms.DateSent,
-		ReadableDate:  intToTime(&sms.Date),
-		ContactName: stringPtr(recipient.SystemDisplayName),
+		Read:           sms.Read,
+		Status:         sms.Status,
+		DateSent:       &sms.DateSent,
+		ReadableDate:   intToTime(&sms.Date),
+		ContactName:    stringPtr(recipient.SystemDisplayName),
 		// RecipientID:   sms.RecipientID,
 	}
 	if v := intPtr(sms.Protocol); v != nil {
@@ -160,64 +160,64 @@ func NewSMS(sms DbSMS, recipient DbRecipient) SMS {
 }
 
 type MMSPartList struct {
-	XMLName      xml.Name  `xml:"parts"`
-	Parts        []MMSPart
+	XMLName xml.Name `xml:"parts"`
+	Parts   []MMSPart
 }
 
 // MMS represents a Multimedia Messaging Service record.
 type MMS struct {
-	XMLName      xml.Name  `xml:"mms"`
+	XMLName      xml.Name `xml:"mms"`
 	PartList     MMSPartList
-	Body         *string   `xml:"-"`
-	TextOnly     uint64    `xml:"text_only,attr"`     // optional
-	Sub          string    `xml:"sub,attr"`           // optional
-	RetrSt       string    `xml:"retr_st,attr"`       // required
-	Date         uint64    `xml:"date,attr"`          // required
-	CtCls        string    `xml:"ct_cls,attr"`        // required
-	SubCs        string    `xml:"sub_cs,attr"`        // required
-	Read         uint64    `xml:"read,attr"`          // required
-	CtL          *string   `xml:"ct_l,attr"`          // optional
-	TrId         *string   `xml:"tr_id,attr"`         // optional
-	St           string    `xml:"st,attr"`            // required
-	MsgBox       uint64    `xml:"msg_box,attr"`       // required
-	RecipientID  uint64    `xml:"recipient_id,attr"`  // required
-	Address      *string   `xml:"address,attr"`       // optional
-	MCls         string    `xml:"m_cls,attr"`         // required
-	DTm          string    `xml:"d_tm,attr"`          // required
-	ReadStatus   string    `xml:"read_status,attr"`   // required
-	CtT          string    `xml:"ct_t,attr"`          // required
-	RetrTxtCs    string    `xml:"retr_txt_cs,attr"`   // required
-	DRpt         uint64    `xml:"d_rpt,attr"`         // required
-	MId          int64     `xml:"m_id,attr"`          // required
-	DateSent     uint64    `xml:"date_sent,attr"`     // required
-	Seen         uint64    `xml:"seen,attr"`          // required
-	MType        *uint64   `xml:"m_type,attr"`        // optional
-	V            uint64    `xml:"v,attr"`             // required
-	Exp          string    `xml:"exp,attr"`           // required
-	Pri          uint64    `xml:"pri,attr"`           // required
-	Rr           uint64    `xml:"rr,attr"`            // required
-	RespTxt      string    `xml:"resp_txt,attr"`      // required
-	RptA         string    `xml:"rpt_a,attr"`         // required
-	Locked       uint64    `xml:"locked,attr"`        // required
-	RetrTxt      string    `xml:"retr_txt,attr"`      // required
-	RespSt       uint64    `xml:"resp_st,attr"`       // required
-	MSize        *uint64   `xml:"m_size,attr"`        // optional
-	ReadableDate *string   `xml:"readable_date,attr"` // required
-	ContactName  *string   `xml:"contact_name,attr"`  // optional
+	Body         *string `xml:"-"`
+	TextOnly     uint64  `xml:"text_only,attr"`     // optional
+	Sub          string  `xml:"sub,attr"`           // optional
+	RetrSt       string  `xml:"retr_st,attr"`       // required
+	Date         uint64  `xml:"date,attr"`          // required
+	CtCls        string  `xml:"ct_cls,attr"`        // required
+	SubCs        string  `xml:"sub_cs,attr"`        // required
+	Read         uint64  `xml:"read,attr"`          // required
+	CtL          *string `xml:"ct_l,attr"`          // optional
+	TrId         *string `xml:"tr_id,attr"`         // optional
+	St           string  `xml:"st,attr"`            // required
+	MsgBox       uint64  `xml:"msg_box,attr"`       // required
+	RecipientID  uint64  `xml:"recipient_id,attr"`  // required
+	Address      *string `xml:"address,attr"`       // optional
+	MCls         string  `xml:"m_cls,attr"`         // required
+	DTm          string  `xml:"d_tm,attr"`          // required
+	ReadStatus   string  `xml:"read_status,attr"`   // required
+	CtT          string  `xml:"ct_t,attr"`          // required
+	RetrTxtCs    string  `xml:"retr_txt_cs,attr"`   // required
+	DRpt         uint64  `xml:"d_rpt,attr"`         // required
+	MId          int64   `xml:"m_id,attr"`          // required
+	DateSent     uint64  `xml:"date_sent,attr"`     // required
+	Seen         uint64  `xml:"seen,attr"`          // required
+	MType        *uint64 `xml:"m_type,attr"`        // optional
+	V            uint64  `xml:"v,attr"`             // required
+	Exp          string  `xml:"exp,attr"`           // required
+	Pri          uint64  `xml:"pri,attr"`           // required
+	Rr           uint64  `xml:"rr,attr"`            // required
+	RespTxt      string  `xml:"resp_txt,attr"`      // required
+	RptA         string  `xml:"rpt_a,attr"`         // required
+	Locked       uint64  `xml:"locked,attr"`        // required
+	RetrTxt      string  `xml:"retr_txt,attr"`      // required
+	RespSt       uint64  `xml:"resp_st,attr"`       // required
+	MSize        *uint64 `xml:"m_size,attr"`        // optional
+	ReadableDate *string `xml:"readable_date,attr"` // required
+	ContactName  *string `xml:"contact_name,attr"`  // optional
 }
 
 // SMS fields as stored in signal database (relevant subset)
-type DbMMS struct{
-	ID			int64
-	Address		int64
-	Read		uint64
-	MType		uint64  //MessageType
-	MSize		sql.NullInt64  //MessageSize
-	CtL		sql.NullString	//ContentLocation
-	Date		uint64
-	DateReceived		uint64
-	Body		sql.NullString
-	TrId		sql.NullString  //TransactionID
+type DbMMS struct {
+	ID           int64
+	Address      int64
+	Read         uint64
+	MType        uint64         //MessageType
+	MSize        sql.NullInt64  //MessageSize
+	CtL          sql.NullString //ContentLocation
+	Date         uint64
+	DateReceived uint64
+	Body         sql.NullString
+	TrId         sql.NullString //TransactionID
 }
 
 // NewMMS constructs an XML MMS struct from a SQL record.
@@ -229,10 +229,10 @@ func NewMMS(mms DbMMS, recipient DbRecipient) MMS {
 		Date:         mms.DateReceived,
 		CtCls:        "null",
 		SubCs:        "null",
-		Body: stringPtr(mms.Body),
+		Body:         stringPtr(mms.Body),
 		Read:         mms.Read,
-		CtL: stringPtr(mms.CtL),
-		TrId: stringPtr(mms.TrId),
+		CtL:          stringPtr(mms.CtL),
+		TrId:         stringPtr(mms.TrId),
 		St:           "null",
 		MCls:         "personal",
 		DTm:          "null",
@@ -249,9 +249,9 @@ func NewMMS(mms DbMMS, recipient DbRecipient) MMS {
 		MSize:        intPtr(mms.MSize),
 		ReadableDate: intToTime(&mms.DateReceived),
 		// RecipientID:  mms.RecipientID,
-		Address: stringPtr(recipient.Phone),
+		Address:     stringPtr(recipient.Phone),
 		ContactName: stringPtr(recipient.SystemDisplayName),
-		MId: mms.ID,
+		MId:         mms.ID,
 	}
 	if xml.ContactName == nil {
 		xml.ContactName = stringPtr(recipient.SignalProfileName)
@@ -275,33 +275,33 @@ type MMSPart struct {
 	UniqueId uint64   `xml:"-"`
 	Seq      uint64   `xml:"seq,attr"`   // required
 	Ct       string   `xml:"ct,attr"`    // required
-	Name     *string   `xml:"name,attr"`  // required
-	ChSet    *string   `xml:"chset,attr"` // required
-	Cd       *string   `xml:"cd,attr"`    // required
-	Fn       *string   `xml:"fn,attr"`    // required
-	CID      *string   `xml:"cid,attr"`   // required
-	Cl       *string   `xml:"cl,attr"`    // required
-	CttS     *string   `xml:"ctt_s,attr"` // required
-	CttT     *string   `xml:"ctt_t,attr"` // required
+	Name     *string  `xml:"name,attr"`  // required
+	ChSet    *string  `xml:"chset,attr"` // required
+	Cd       *string  `xml:"cd,attr"`    // required
+	Fn       *string  `xml:"fn,attr"`    // required
+	CID      *string  `xml:"cid,attr"`   // required
+	Cl       *string  `xml:"cl,attr"`    // required
+	CttS     *string  `xml:"ctt_s,attr"` // required
+	CttT     *string  `xml:"ctt_t,attr"` // required
 	Text     string   `xml:"text,attr"`  // required
 	Data     *string  `xml:"data,attr"`  // optional
 }
 
 // Part fields as stored in signal database (relevant subset)
-type DbPart struct{
-	Mid			int64  //MessageId
-	Seq			int64  //Sequence
-	Ct			string  //ContentType
-	Name			sql.NullString
-	Chset			sql.NullString  //CharacterSet
-	Cd			sql.NullString  //ContentDisposition
-	Fn			sql.NullString
-	Cid			sql.NullString
-	Cl			sql.NullString  //ContentLocation
-	CttS			sql.NullString //NullInt64
-	CttT			sql.NullString
-	DataSize	uint64
-	UniqueId	uint64
+type DbPart struct {
+	Mid      int64  //MessageId
+	Seq      int64  //Sequence
+	Ct       string //ContentType
+	Name     sql.NullString
+	Chset    sql.NullString //CharacterSet
+	Cd       sql.NullString //ContentDisposition
+	Fn       sql.NullString
+	Cid      sql.NullString
+	Cl       sql.NullString //ContentLocation
+	CttS     sql.NullString //NullInt64
+	CttT     sql.NullString
+	DataSize uint64
+	UniqueId uint64
 }
 
 // NewPart constructs an XML Part struct from a SQL record.
@@ -380,7 +380,7 @@ func translateSMSType(t int64) SMSType {
 	if 1 <= v && v <= 18 {
 		return SMSInvalid
 	}
-	
+
 	switch v {
 	case 20: // signal inbox
 		return SMSReceived

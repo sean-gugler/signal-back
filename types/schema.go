@@ -7,6 +7,7 @@ import (
 )
 
 type ColumnType int
+
 const (
 	CT_None ColumnType = iota
 	CT_Text
@@ -15,28 +16,28 @@ const (
 	CT_Blob
 )
 
-func columnTypeFromString (s string) ColumnType {
+func columnTypeFromString(s string) ColumnType {
 	switch s {
 	case "TEXT":    return CT_Text
 	case "INTEGER": return CT_Integer
 	case "REAL":    return CT_Real
 	case "BLOB":    return CT_Blob
-	default:	    return CT_None
+	default:        return CT_None
 	}
 }
 
 type Schema struct {
-	Index   map[string]int
-	Type    []ColumnType
+	Index map[string]int
+	Type  []ColumnType
 }
 
 func NewSchema(statement_params string) *Schema {
 	// remove parentheses, then split by commas
 	cols := strings.Split(Unwrap(statement_params, "()"), ",")
 
-	s := Schema {
+	s := Schema{
 		Index: make(map[string]int),
-		Type: make([]ColumnType, len(cols)),
+		Type:  make([]ColumnType, len(cols)),
 	}
 
 	// Directives like "UNIQUE(field, field)" get split by commas, too.
@@ -73,13 +74,13 @@ func NewSchema(statement_params string) *Schema {
 	return &s
 }
 
-func (s *Schema) Field (row []*signal.SqlStatement_SqlParameter, column string) interface{} {
+func (s *Schema) Field(row []*signal.SqlStatement_SqlParameter, column string) interface{} {
 	i := s.Index[column]
 	t := s.Type[i]
 	return ParameterValue(row[i], t)
 }
 
-func (s *Schema) RowValues (row []*signal.SqlStatement_SqlParameter) []interface{} {
+func (s *Schema) RowValues(row []*signal.SqlStatement_SqlParameter) []interface{} {
 	pv := make([]interface{}, len(row))
 	for i, v := range row {
 		pv[i] = ParameterValue(v, s.Type[i])
@@ -100,7 +101,7 @@ func signed(u *uint64) *int64 {
 	return &s
 }
 
-func ParameterValue (p *signal.SqlStatement_SqlParameter, typ ColumnType) interface{} {
+func ParameterValue(p *signal.SqlStatement_SqlParameter, typ ColumnType) interface{} {
 	// https://www.sqlite.org/datatype3.html#type_affinity
 	//     "The type affinity of a column is the recommended type for data stored
 	//     in that column. The important idea here is that the type is recommended,

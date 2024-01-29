@@ -100,28 +100,28 @@ var Extract = cli.Command{
 }
 
 type attachmentInfo struct {
-	msg     int64
-	mime    *string
-	size    int64
-	name    *string
+	msg  int64
+	mime *string
+	size int64
+	name *string
 }
- 
+
 type avatarInfo struct {
 	DisplayName *string
 	ProfileName *string
 	fetchTime   int64
 }
- 
+
 type stickerInfo struct {
-	Pack_id     string
-	Title       string
-	Author      string
-	size        int64
-	sticker_id  int64
-	cover       bool
+	Pack_id    string
+	Title      string
+	Author     string
+	size       int64
+	sticker_id int64
+	cover      bool
 }
 
-func createDB (fileName string) (db *sql.DB, err error) {
+func createDB(fileName string) (db *sql.DB, err error) {
 	log.Printf("Begin decrypt into %s", fileName)
 
 	if err := os.Remove(fileName); err != nil && !os.IsNotExist(err) {
@@ -132,7 +132,7 @@ func createDB (fileName string) (db *sql.DB, err error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create database file")
 	}
-	
+
 	return db, nil
 }
 
@@ -149,8 +149,10 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	var db *sql.DB
 	var err error
 	if !c.Bool("database") {
-		db, err = createDB (path.Join(base, filenameDB))
-		if err != nil { return err }
+		db, err = createDB(path.Join(base, filenameDB))
+		if err != nil {
+			return err
+		}
 		defer db.Close()
 	}
 
@@ -368,7 +370,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			} else {
 				m[key] = p.Value
 			}
-			
+
 			return nil
 		}
 		fns.KeyValueFunc = func(kv *signal.KeyValue) error {
@@ -424,7 +426,6 @@ func writeJson(pathName string, value interface{}) error {
 		return err
 	})
 }
-
 
 func writeAttachment(pathName string, length uint32, bf *types.BackupFile) error {
 	return writeFile(pathName, func(file io.Writer) error {
@@ -514,7 +515,7 @@ func fixFileExtension(pathName string, mimeType string) (string, error) {
 
 // No simple API like 'GetExtension(mime)' found in https://github.com/h2non/filetype
 // This implementation is modeled after filetype.IsMIMESupported
-func GetExtension(mime string)(string, bool) {
+func GetExtension(mime string) (string, bool) {
 	found := false
 	ext := ""
 
@@ -525,7 +526,7 @@ func GetExtension(mime string)(string, bool) {
 			ext = kind.Extension
 			found = true
 		}
-		return !found  //continue Range until found
+		return !found //continue Range until found
 	})
 
 	return ext, found

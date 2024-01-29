@@ -113,7 +113,7 @@ func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 
 	io.ReadFull(bf.file, frame)
 
-	messageLength := len(frame)-10
+	messageLength := len(frame) - 10
 	theirMac := frame[messageLength:]
 
 	bf.Mac.Reset()
@@ -148,7 +148,7 @@ func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 func (bf *BackupFile) DecryptAttachment(length uint32, out io.Writer) error {
 	// if length == 0 {
 	// 	return errors.New("can't read attachment of length 0")
-	// } 
+	// }
 
 	uint32ToBytes(bf.IV, bf.Counter)
 	bf.Counter++

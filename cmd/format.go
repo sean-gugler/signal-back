@@ -54,9 +54,9 @@ var Format = cli.Command{
 		}
 
 		var (
-			db *sql.DB
+			db       *sql.DB
 			pathBase string
-			err error
+			err      error
 		)
 		if dbfile := c.Args().Get(0); dbfile == "" {
 			return errors.New("must specify a Signal database file")
@@ -208,7 +208,6 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 		mid, xml := synctech.NewPart(*r)
 		mmsParts[mid] = append(mmsParts[mid], xml)
 	}
-
 
 	for _, mms := range mmses {
 		var messageSize uint64

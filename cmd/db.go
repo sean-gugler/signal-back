@@ -111,21 +111,12 @@ func SelectEntireTable(db *sql.DB, table string) (columnNames []string, records 
 		if err != nil {
 			return nil, nil, errors.Wrap(err, q)
 		}
-		cols := make([]interface{}, 0, len(columns))
 
+		cols := make([]interface{}, 0, len(columns))
 		for _, col := range columns {
-			// ScanType always chooses a pointer to a primitive data type,
-			// or 'nil' when the value is null. This is unfortunate because
-			// nil will cause Scan to panic. It would be nice if ScanType
-			// always returned an appropriate sql.Null type instead. As a
-			// workaround, we substitute nil with a Null type (it doesn't
-			// matter which one, since we know Valid will always be false).
-			var p interface{} = &sql.NullBool{}
-			if typ := col.ScanType(); typ != nil {
-				p = reflect.New(typ).Interface()
-			}
-			cols = append(cols, p)
+			cols = append(cols, ScanType(col))
 		}
+
 		if err = rows.Scan(cols...); err != nil {
 			return nil, nil, errors.Wrap(err, "scan")
 		}
@@ -141,6 +132,30 @@ func SelectEntireTable(db *sql.DB, table string) (columnNames []string, records 
 	}
 
 	return columnNames, records, nil
+}
+
+// Accommodate deficiencies in the driver's ScanType()
+func ScanType(col *sql.ColumnType) interface{} {
+	typ := col.ScanType()
+	if typ == nil {
+		// Driver always chooses a pointer to a /primitive/ data type
+		// or 'nil' when the VALUE is null. This is unfortunate because
+		// nil will cause Scan to panic.
+		//
+		// It would be nice if col.ScanType returned an
+		// appropriate sql.Null* type but it never does.
+		// We must substitute nil with one of those Null types (it doesn't
+		// matter which one, since we know type.Valid will always be false).
+		return &sql.NullBool{}
+
+	} else if col.DatabaseTypeName() == "BLOB" {
+		// Driver chooses inappropriate type *[][]byte
+		// Replace with *[]byte
+		return &[]byte{}
+
+	} else {
+		return reflect.New(typ).Interface()
+	}
 }
 
 // Convert results from SelectEntireTable into strings

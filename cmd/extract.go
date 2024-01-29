@@ -478,6 +478,8 @@ func escapeFileName(fileName string) (string) {
 }
 
 func fixFileExtension(pathName string, mimeType string) (string, error) {
+	fileName := filepath.Base(pathName)
+
 	// Set default extension by MIME type
 	ext := ""
 	if mimeType != "" {
@@ -485,7 +487,7 @@ func fixFileExtension(pathName string, mimeType string) (string, error) {
 		if hasExt {
 			ext = mimeExt
 		} else {
-			log.Printf("mime type `%s` not recognised", mimeType)
+			log.Printf("mime type `%s` not recognised [%v]", mimeType, fileName)
 		}
 	}
 
@@ -495,17 +497,17 @@ func fixFileExtension(pathName string, mimeType string) (string, error) {
 	} else {
 		if kind != filetype.Unknown {
 			if ext != "" && (kind.MIME.Value != mimeType || kind.Extension != ext) {
-				log.Printf("detected file type: %s (.%s)", kind.MIME.Value, kind.Extension)
+				log.Printf("detected file type: %s (.%s) [%v]", kind.MIME.Value, kind.Extension, fileName)
 				log.Printf("mismatches declared type: %s (.%s)", mimeType, ext)
 			}
 			ext = kind.Extension
 		} else {
-			log.Printf("unable to detect file type of %v", pathName)
+			log.Printf("unable to detect file type [%v]", fileName)
 			if ext != "" {
 				log.Printf("using declared MIME type: %s (.%s)", mimeType, ext)
 			} else {
 				log.Println("*** Please create a PR or issue if you think it have should been.")
-				log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", pathName)
+				log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", fileName)
 			}
 		}
 	}

@@ -505,6 +505,8 @@ func fixFileExtension(pathName string, mimeType string) (string, error) {
 			log.Printf("unable to detect file type [%v]", fileName)
 			if ext != "" {
 				log.Printf("using declared MIME type: %s (.%s)", mimeType, ext)
+			} else if strings.HasPrefix(mimeType, "text/") {
+				log.Printf("assuming contents are `text`")
 			} else {
 				log.Println("*** Please create a PR or issue if you think it have should been.")
 				log.Printf("*** If you can provide details on the file `%v` as well, it would be appreciated", fileName)

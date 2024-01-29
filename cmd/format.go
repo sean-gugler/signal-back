@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -241,7 +242,13 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 			continue
 		}
 		mms.PartList.Parts = parts
-		mms.MSize = &messageSize
+
+		sizeString := strconv.FormatUint(messageSize, 10)
+		if mms.MSize != "null" && mms.MSize != sizeString {
+			log.Printf("MessageID %v declared size %v != calculated size %v\n", id, mms.MSize, sizeString)
+		}
+		mms.MSize = sizeString
+
 		if mms.MType == nil {
 			if synctech.SetMMSMessageType(synctech.MMSSendReq, &mms) != nil {
 				panic("logic error: this should never happen")

@@ -23,13 +23,13 @@ import (
 // Format fulfils the `format` subcommand.
 var Format = cli.Command{
 	Name:               "format",
-	Usage:              "Extract messages from a signal database",
-	UsageText:          "Parse and transform messages in the database into other formats.",
+	Usage:              "Export messages from a signal database",
+	UsageText:          "Parse and transform messages in the database into other formats.\nXML format is compatible with SMS Backup & Restore by SyncTech",
 	CustomHelpTemplate: SubcommandHelp,
-	Flags: append([]cli.Flag{
+	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "format, f",
-			Usage: "output messages as `FORMAT` (xml, csv, raw)",
+			Usage: "output messages as `FORMAT` (xml, csv, json)",
 			Value: "xml",
 		},
 		&cli.StringFlag{
@@ -41,7 +41,11 @@ var Format = cli.Command{
 			Name:  "output, o",
 			Usage: "write formatted data to `FILE`",
 		},
-	}, coreFlags...),
+		&cli.BoolFlag{
+			Name:  "verbose, v",
+			Usage: "enable verbose logging output",
+		},
+	},
 	Action: func(c *cli.Context) error {
 		if c.Bool("verbose") {
 			log.SetOutput(os.Stderr)

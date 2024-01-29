@@ -21,9 +21,9 @@ func main() {
 	app.CustomAppHelpTemplate = cmd.AppHelp
 	app.Version = version
 	app.Commands = []cli.Command{
-		cmd.Format,
 		cmd.Analyse,
 		cmd.Extract,
+		cmd.Format,
 	}
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{

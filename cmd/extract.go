@@ -156,19 +156,21 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 		defer db.Close()
 	}
 
-	schema      := make(map[string]*types.Schema)
-	section     := make(map[string]bool)
-	attachments := make(map[int64]attachmentInfo)
-	avatars     := make(map[string]avatarInfo)
-	stickers    := make(map[int64]stickerInfo)
-	prefs       := make(map[string]map[string]interface{})
+	var (
+		schema      = make(map[string]*types.Schema)
+		section     = make(map[string]bool)
+		attachments = make(map[int64]attachmentInfo)
+		avatars     = make(map[string]avatarInfo)
+		stickers    = make(map[int64]stickerInfo)
+		prefs       = make(map[string]map[string]interface{})
+	)
 
 	fns := types.ConsumeFuncs{
 		StatementFunc: func(s *signal.SqlStatement) error {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Println(*s.Statement)
-					log.Println(s.Parameters)
+					fmt.Println(*s.Statement)
+					fmt.Println(s.Parameters)
 					panic(r)
 				}
 			}()

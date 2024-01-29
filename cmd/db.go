@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"strings"
@@ -166,8 +167,12 @@ func StringifyRows(vrows [][]interface{}) [][]string {
 		for _, v := range vrow {
 			s := ""
 			if v != nil {
-				ptr := reflect.ValueOf(v)
-				s = fmt.Sprintf("%v", ptr.Elem())
+				if vb, ok := v.(*[]byte); ok {
+					s = base64.StdEncoding.EncodeToString(*vb)
+				} else {
+					ptr := reflect.ValueOf(v)
+					s = fmt.Sprintf("%v", ptr.Elem())
+				}
 			}
 			ss = append(ss, s)
 		}

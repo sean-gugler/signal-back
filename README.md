@@ -1,3 +1,20 @@
+# Important note on this fork
+
+**Important: In the current state this fork only supports backup files prior to the introduction of the _phone numer hiding_ feature.
+Backup files newer than 2023-06 might now work and instead report an `error: failed to analyse file: Decryption error, wrong password` error.**
+
+## Building
+The state of the repository might not be in a working state. To build you can try doing the following steps to create binaries.
+
+     git clone https://github.com/sean-gugler/signal-back
+     go get
+     build_all.sh 
+
+Below is the documentation from the upstream author xeals, which is in significant parts outdated.
+
+---
+
+
 # signal-back
 
 [![Build status](https://travis-ci.org/xeals/signal-back.svg?branch=master)](https://travis-ci.org/xeals/signal-back)

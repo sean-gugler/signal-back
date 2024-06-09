@@ -1,16 +1,19 @@
-# Important note on this fork
+# Notes about this fork
 
-**Important: In the current state this fork only supports backup files prior to the introduction of the _phone numer hiding_ feature.
-Backup files newer than 2023-06 might now work and instead report an `error: failed to analyse file: Decryption error, wrong password` error.**
+This code is tested and working for Signal backup files made earlier than 2023-07-12. At that time the file format was revised, and this tool does not yet parse the newer format. See signalapp commit [c6473ca](https://github.com/signalapp/Signal-Android/commit/c6473ca9e63236af3eae9959a50cfa643d53272e) for details.
+
+Binaries for this tool have not yet been updated in github. You'll need to rebuild from source.
 
 ## Building
-The state of the repository might not be in a working state. To build you can try doing the following steps to create binaries.
+You must have [Go](https://golang.org) and [dep](https://github.com/golang/dep) installed.
+
+The following steps will create binaries:
 
      git clone https://github.com/sean-gugler/signal-back
      go get
      build_all.sh 
 
-Below is the documentation from the upstream author xeals, which is in significant parts outdated.
+Below is the documentation from the upstream author xeals. Parts have been updated for this fork, but others are significantly outdated.
 
 ---
 
@@ -105,7 +108,7 @@ Building requires [Go](https://golang.org) and [dep](https://github.com/golang/d
 
 ```
 $ git clone https://github.com/sean-gugler/signal-back $GOPATH/src/github.com/sean-gugler/signal-back
-$ cd $GOPATH/src/github.com/xeals/signal-back
+$ cd $GOPATH/src/github.com/sean-gugler/signal-back
 $ dep ensure
 $ go build .
 ```

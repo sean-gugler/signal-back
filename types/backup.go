@@ -78,6 +78,11 @@ func NewBackupFile(path, password string) (*BackupFile, error) {
 		return nil, errors.Wrap(err, "failed to decode header")
 	}
 
+	version := frame.Header.GetVersion()
+	if version > 0 {
+		return nil, errors.New(fmt.Sprintf("File Version %d not yet supported", version))
+	}
+
 	iv := frame.Header.Iv
 	if len(iv) != 16 {
 		return nil, errors.New("No IV in header")

@@ -38,6 +38,7 @@ var ProtoCommitHash = "d6610f0"
 // iteration manually, or is done as part of the Consume method.
 type BackupFile struct {
 	file      *os.File
+	Version   uint32
 	FileSize  int64
 	CipherKey []byte
 	MacKey    []byte
@@ -79,7 +80,7 @@ func NewBackupFile(path, password string) (*BackupFile, error) {
 	}
 
 	version := frame.Header.GetVersion()
-	if version > 0 {
+	if version > 1 {
 		return nil, errors.New(fmt.Sprintf("File Version %d not yet supported", version))
 	}
 
@@ -95,6 +96,7 @@ func NewBackupFile(path, password string) (*BackupFile, error) {
 
 	return &BackupFile{
 		file:      file,
+		Version:   version,
 		FileSize:  size,
 		CipherKey: cipherKey,
 		MacKey:    macKey,
@@ -113,23 +115,6 @@ func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 		return 0, nil, err
 	}
 
-	frameLength := bytesToUint32(length)
-	frame := make([]byte, frameLength)
-
-	io.ReadFull(bf.file, frame)
-
-	messageLength := len(frame) - 10
-	theirMac := frame[messageLength:]
-
-	bf.Mac.Reset()
-	bf.Mac.Write(frame[:messageLength])
-	ourMac := bf.Mac.Sum(nil)[:10]
-
-	if !hmac.Equal(theirMac, ourMac) {
-		// log.Printf("MAC expect %s found %s", hex.EncodeToString(ourMac), hex.EncodeToString(theirMac))
-		return 0, nil, errors.New("Decryption error, wrong password")
-	}
-
 	uint32ToBytes(bf.IV, bf.Counter)
 	bf.Counter++
 
@@ -138,6 +123,32 @@ func (bf *BackupFile) Frame() (uint32, *signal.BackupFrame, error) {
 		return 0, nil, errors.New("Bad cipher")
 	}
 	stream := cipher.NewCTR(aesCipher, bf.IV)
+
+	bf.Mac.Reset()
+
+	if bf.Version >= 1 {
+		// Frame length is also encrypted
+		bf.Mac.Write(length)
+		output := make([]byte, 4)
+		stream.XORKeyStream(output, length)
+		length = output
+	}
+
+	frameLength := bytesToUint32(length)
+	frame := make([]byte, frameLength)
+
+	io.ReadFull(bf.file, frame)
+
+	messageLength := len(frame) - 10
+	theirMac := frame[messageLength:]
+
+	bf.Mac.Write(frame[:messageLength])
+	ourMac := bf.Mac.Sum(nil)[:10]
+
+	if !hmac.Equal(theirMac, ourMac) {
+		// log.Printf("MAC expect %s found %s", hex.EncodeToString(ourMac), hex.EncodeToString(theirMac))
+		return 0, nil, errors.New("Decryption error, wrong password")
+	}
 
 	output := make([]byte, messageLength)
 	stream.XORKeyStream(output, frame[:messageLength])

@@ -133,6 +133,16 @@ func createDB(fileName string) (db *sql.DB, err error) {
 		return nil, errors.Wrap(err, "cannot create database file")
 	}
 
+	// Boost performance. It takes 100 times longer to create the db file without these!
+	_, err = db.Exec("PRAGMA journal_mode = OFF")
+	if err != nil {
+		return nil, errors.Wrap(err, "PRAGMA journal_mode failed")
+	}
+	_, err = db.Exec("PRAGMA synchronous = OFF")
+	if err != nil {
+		return nil, errors.Wrap(err, "PRAGMA synchronous failed")
+	}
+
 	return db, nil
 }
 

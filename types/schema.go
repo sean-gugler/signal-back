@@ -75,8 +75,11 @@ func NewSchema(statement_params string) *Schema {
 }
 
 func (s *Schema) Field(row []*signal.SqlStatement_SqlParameter, column string) interface{} {
-	i := s.Index[column]
-	t := s.Type[i]
+	i, ok := s.Index[column]
+	t     := s.Type[i]
+	if !ok {
+		panic("Field not found: " + column)
+	}
 	return ParameterValue(row[i], t)
 }
 

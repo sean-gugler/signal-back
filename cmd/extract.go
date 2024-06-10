@@ -248,6 +248,15 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				sch := schema[table]
 				ps := s.GetParameters()
 				switch table {
+				case "attachment":
+					id := *sch.Field(ps, "_id").(*int64)
+					attachments[id] = attachmentInfo{
+						msg:    *sch.Field(ps, "message_id").(*int64),
+						mime:    sch.Field(ps, "content_type").(*string),
+						size:   *sch.Field(ps, "data_size").(*int64),
+						name:    sch.Field(ps, "file_name").(*string),
+					}
+
 				case "part":
 					id := *sch.Field(ps, "unique_id").(*int64)
 					attachments[id] = attachmentInfo{
@@ -298,7 +307,10 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 
 	if !c.Bool("attachments") {
 		fns.AttachmentFunc = func(a *signal.Attachment) error {
-			id := int64(*a.AttachmentId)
+			id := int64(a.GetRowId())
+			if a.AttachmentId != nil {
+				id = int64(*a.AttachmentId)
+			}
 			info, hasInfo := attachments[id]
 
 			fileName := fmt.Sprintf("%v", id)

@@ -74,6 +74,11 @@ func NewSchema(statement_params string) *Schema {
 	return &s
 }
 
+func (s *Schema) HasField(name string) bool {
+	_, ok := s.Index[name]
+	return ok
+}
+
 func (s *Schema) Field(row []*signal.SqlStatement_SqlParameter, column string) interface{} {
 	i, ok := s.Index[column]
 	t     := s.Type[i]

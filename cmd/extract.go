@@ -195,7 +195,33 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 					}
 					return nil
 				}
-				schema[table] = types.NewSchema(a[3])
+				sch := types.NewSchema(a[3])
+				schema[table] = sch
+				schema_stmt[table] = stmt
+				
+				// Some column names have changed between Signal releases
+				target := ""
+				switch table {
+				case "recipient":
+					field_DisplayName = findColumn(sch, []string{
+						"system_display_name",
+						"system_joined_name",
+						})
+					if field_DisplayName == "" {
+						target = "avatar.DisplayName"
+					}
+
+					field_ProfileName = findColumn(sch, []string{
+						"signal_profile_name",
+						"profile_joined_name",
+						})
+					if field_ProfileName == "" {
+						target = "avatar.ProfileName"
+					}
+				}
+				if target != "" {
+					return errors.New(fmt.Sprintf("no suitable column in `%s` for %s", table, target))
+				}
 
 			} else if strings.HasPrefix(stmt, "INSERT INTO ") {
 				a := strings.SplitN(stmt, " ", 4)
@@ -225,8 +251,8 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 					n_id := *sch.Field(ps, "_id").(*int64)
 					s_id := fmt.Sprintf("%d", n_id)
 					avatars[s_id] = avatarInfo{
-						DisplayName:    sch.Field(ps, "system_display_name").(*string),
-						ProfileName:    sch.Field(ps, "signal_profile_name").(*string),
+						DisplayName:    sch.Field(ps, field_DisplayName).(*string),
+						ProfileName:    sch.Field(ps, field_ProfileName).(*string),
 						fetchTime:     *sch.Field(ps, "last_profile_fetch").(*int64),
 					}
 
@@ -424,6 +450,15 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 	log.Println("Done!")
 
 	return nil
+}
+
+func findColumn(sch *types.Schema, cols []string) string {
+	for _, column := range cols {
+		if sch.HasField(column) {
+			return column
+		}
+	}
+	return ""
 }
 
 func writeJson(pathName string, value interface{}) error {

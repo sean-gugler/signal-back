@@ -171,6 +171,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 		schema      = make(map[string]*types.Schema)
 		section     = make(map[string]bool)
 		attachments = make(map[int64]attachmentInfo)
+		attachmentFiles = make(map[int64]string)
 		avatars     = make(map[string]avatarInfo)
 		stickers    = make(map[int64]stickerInfo)
 		prefs       = make(map[string]map[string]interface{})
@@ -179,6 +180,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 		debug_table string
 		field_DisplayName string
 		field_ProfileName string
+		field_MessageDate string
 	)
 
 	fns := types.ConsumeFuncs{
@@ -227,6 +229,14 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 						})
 					if field_ProfileName == "" {
 						target = "avatar.ProfileName"
+					}
+				case "message", "mms":
+					field_MessageDate = findColumn(sch, []string{
+						"date_sent",
+						"date",
+						})
+					if field_MessageDate == "" {
+						target = "attachment.Timestamp"
 					}
 				}
 				if target != "" {
@@ -285,6 +295,16 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 						sticker_id: *sch.Field(ps, "sticker_id").(*int64),
 						cover:     (*sch.Field(ps, "cover").(*int64) != 0),
 					}
+
+				case "message", "mms":
+					id := *sch.Field(ps, "_id").(*int64)
+					path, hasAttachment := attachmentFiles[id]
+					if hasAttachment {
+						time := *sch.Field(ps, field_MessageDate).(*int64)
+						if err := setFileTimestamp(path, time); err != nil {
+							return err
+						}
+					}
 				}
 
 				// db.Exec cannot know which member of Parameter struct to use
@@ -338,8 +358,8 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 				return errors.Wrap(err, "attachment")
 			} else if newName, err := fixFileExtension(pathName, mime); err != nil {
 				return errors.Wrap(err, "attachment")
-			} else if err := setFileTimestamp(newName, id); err != nil {
-				return errors.Wrap(err, "attachment")
+			} else if hasInfo {
+				attachmentFiles[info.msg] = newName
 			}
 			return nil
 		}
@@ -521,7 +541,8 @@ func setFileTimestamp(pathName string, milliseconds int64) error {
 		mtime := time.UnixMilli(milliseconds)
 
 		if err := os.Chtimes(pathName, atime, mtime); err != nil {
-			return errors.Wrap(err, "failed to change timestamp of attachment file")
+			msg := fmt.Sprintf("failed to change timestamp of %v to %v", pathName, milliseconds)
+			return errors.Wrap(err, msg)
 		}
 	}
 	return nil

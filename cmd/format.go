@@ -29,22 +29,22 @@ var Format = cli.Command{
 	CustomHelpTemplate: SubcommandHelp,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
+			Name:  "output, o",
+			Usage: "Write formatted data to `FILE` (default is console)",
+		},
+		&cli.StringFlag{
 			Name:  "format, f",
-			Usage: "output messages as `FORMAT` (xml, csv, json)",
-			Value: "xml",
+			Usage: "Output messages as `FORMAT` (xml, csv, json). " +
+			       "Default matches --output file extension, or xml if no output file specified.",
 		},
 		&cli.StringFlag{
 			Name:  "table, t",
-			Usage: "for csv|json, choose which table to format (e.g. sms, mms, part)",
-			Value: "sms",
-		},
-		&cli.StringFlag{
-			Name:  "output, o",
-			Usage: "write formatted data to `FILE`",
+			Usage: "For csv|json, choose which table to format (e.g. message, sms). " +
+			       "Default matches --output file basename, or 'message' if no output file specified.",
 		},
 		&cli.BoolFlag{
 			Name:  "verbose, v",
-			Usage: "enable verbose logging output",
+			Usage: "Enable verbose logging output",
 		},
 	},
 	Action: func(c *cli.Context) error {
@@ -58,6 +58,7 @@ var Format = cli.Command{
 			db       *sql.DB
 			pathBase string
 			err      error
+			out      io.Writer
 		)
 		if dbfile := c.Args().Get(0); dbfile == "" {
 			return errors.New("must specify a Signal database file")
@@ -69,10 +70,33 @@ var Format = cli.Command{
 
 		pathAttachments := filepath.Join(pathBase, FolderAttachment)
 
-		var out io.Writer
-		if c.String("output") != "" {
+		output := c.String("output")
+		table := strings.ToLower(c.String("table"))
+		format := strings.ToLower(c.String("format"))
+
+		if output == "" {
+			if format == "" {
+				format = "xml"
+			} else if table == "" {
+				table = "message"
+			}
+			out = os.Stdout
+		} else {
+			ext := filepath.Ext(output)
+			base := filepath.Base(output)
+
+			// remove extension from base
+			base = base[:len(base)-len(ext)]
+
+			if format == "" && len(ext) > 0 {
+				format = ext[1:]  //remove '.'
+			}
+			if table == "" {
+				table = base
+			}
+
 			var file *os.File
-			file, err = os.OpenFile(c.String("output"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			file, err = os.OpenFile(output, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 			out = io.Writer(file)
 			if err != nil {
 				return errors.Wrap(err, "unable to open output file")
@@ -82,13 +106,9 @@ var Format = cli.Command{
 					log.Fatalf("unable to close output file: %s", err.Error())
 				}
 			}()
-		} else {
-			out = os.Stdout
 		}
 
-		table := strings.ToLower(c.String("table"))
-
-		switch strings.ToLower(c.String("format")) {
+		switch strings.ToLower(format) {
 		case "json":
 			err = JSON(db, table, out)
 		case "csv":
@@ -96,7 +116,7 @@ var Format = cli.Command{
 		case "xml":
 			err = Synctech(db, pathAttachments, out)
 		default:
-			return errors.Errorf("format %s not recognised", c.String("format"))
+			return errors.Errorf("format '%s' not recognised", format)
 		}
 		if err != nil {
 			return errors.Wrap(err, "failed to format output")

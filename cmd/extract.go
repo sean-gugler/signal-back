@@ -92,7 +92,7 @@ var Extract = cli.Command{
 			}
 		}
 		if err = ExtractFiles(bf, c, basePath); err != nil {
-			return errors.Wrap(err, "failed to extract attachment")
+			return errors.Wrap(err, "failed to extract")
 		}
 
 		return nil
@@ -171,7 +171,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 		schema      = make(map[string]*types.Schema)
 		section     = make(map[string]bool)
 		attachments = make(map[int64]attachmentInfo)
-		attachmentFiles = make(map[int64]string)
+		timestamp   = make(map[int64][]string)
 		avatars     = make(map[string]avatarInfo)
 		stickers    = make(map[int64]stickerInfo)
 		prefs       = make(map[string]map[string]interface{})
@@ -297,10 +297,9 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 					}
 
 				case "message", "mms":
-					id := *sch.Field(ps, "_id").(*int64)
-					path, hasAttachment := attachmentFiles[id]
-					if hasAttachment {
-						time := *sch.Field(ps, field_MessageDate).(*int64)
+					id   := *sch.Field(ps, "_id").(*int64)
+					time := *sch.Field(ps, field_MessageDate).(*int64)
+					for _, path := range timestamp[id] {
 						if err := setFileTimestamp(path, time); err != nil {
 							return err
 						}
@@ -333,7 +332,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			}
 			info, hasInfo := attachments[id]
 
-			fileName := fmt.Sprintf("%v", id)
+			fileName := fmt.Sprintf("%06d", id)
 			mime := ""
 
 			if !hasInfo {
@@ -359,7 +358,7 @@ func ExtractFiles(bf *types.BackupFile, c *cli.Context, base string) error {
 			} else if newName, err := fixFileExtension(pathName, mime); err != nil {
 				return errors.Wrap(err, "attachment")
 			} else if hasInfo {
-				attachmentFiles[info.msg] = newName
+				timestamp[info.msg] = append(timestamp[info.msg], newName)
 			}
 			return nil
 		}

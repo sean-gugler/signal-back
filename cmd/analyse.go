@@ -95,6 +95,9 @@ func AnalyseFile(bf *types.BackupFile, c *cli.Context) (map[string]int, error) {
 		desc := fmt.Sprintf("%012X: FRAME %d header:<iv:%x, salt:%x>", 0, 0, bf.IV, bf.Salt)
 		fmt.Println(desc)
 	}
+	if c.Bool("summary") {
+		fmt.Println("File version", bf.Version)
+	}
 
 	ended := 0
 	frame_number := 1
@@ -109,12 +112,18 @@ func AnalyseFile(bf *types.BackupFile, c *cli.Context) (map[string]int, error) {
 
 			if f.GetHeader() != nil {
 				hdr := f.GetHeader()
-				desc += fmt.Sprintf(" header:<iv:%x, salt:%x>", hdr.GetIv(), hdr.GetSalt())
+				desc += fmt.Sprintf(" header:<version:%d iv:%x, salt:%x>", hdr.GetVersion(), hdr.GetIv(), hdr.GetSalt())
 				counts["header"]++
+				if c.Bool("summary") {
+					fmt.Println("File version ", hdr.GetVersion())
+				}
 			}
 			if f.GetVersion() != nil {
 				desc += fmt.Sprintf(" version:%d", f.GetVersion().GetVersion())
 				counts["version"]++
+				if c.Bool("summary") {
+					fmt.Println("Database", f.GetVersion())
+				}
 			}
 			if f.GetStatement() != nil {
 				stmt := f.GetStatement().GetStatement()

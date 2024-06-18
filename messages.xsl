@@ -55,20 +55,20 @@
 		<xsl:for-each select="messages/*">
 		<tr>
 			<td>
-				<xsl:if test="@msg_box = 1">
+				<xsl:if test="@type = 1">
 				Received
 				</xsl:if>
-				<xsl:if test="@msg_box = 2">
+				<xsl:if test="@type = 2">
 				Sent
 				</xsl:if>
-				<xsl:if test="@msg_box = 3">
+				<xsl:if test="@type = 3">
 				Draft
 				</xsl:if>
 			</td>
 			<td><xsl:value-of select="@from"/></td>
 			<td><xsl:value-of select="@contact_name"/></td>
 			<td><xsl:value-of select="@readable_date"/></td>
-			<td>
+			<td style="word-wrap: break-word;">
 				<xsl:value-of select="@body"/>
 				<xsl:for-each select="attachments/attachment">
 					<a>

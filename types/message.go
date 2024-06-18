@@ -185,6 +185,7 @@ type DbAttachment struct {
 	ContentType       sql.NullString
 	RemoteKey       sql.NullString
 	RemoteLocation       sql.NullString
+	TransferState uint64
 	FileName sql.NullString
 }
 

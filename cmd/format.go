@@ -226,11 +226,16 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 
 				prefix := fmt.Sprintf("%06d", attachment.ID)
 				if path, err := findAttachment(pathAttachments, prefix); err != nil {
-					if err == os.ErrNotExist {
-						log.Printf("No attachment file found at '%v' with id = %v", pathAttachments, prefix)
-					} else {
+					if err != os.ErrNotExist {
 						return errors.Wrap(err, "find attachment")
+					} else if xml.ContentType == "application/x-signal-view-once" {
+						log.Printf("'View Once' attachment %v missing, as expected", prefix)
+					} else if attachment.TransferState > 0 {
+						log.Printf("attachment %v missing, transfer state incomplete (%v)", prefix, attachment.TransferState)
+					} else {
+						log.Printf("attachment file unexpectedly not found under '%v' folder with id = %v", pathAttachments, prefix)
 					}
+					xml.Src = filepath.Join(pathAttachments, prefix)
 				} else if info, err := os.Stat(path); err != nil {
 					return errors.Wrap(err, "attachment size")
 				} else {

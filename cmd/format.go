@@ -114,7 +114,7 @@ var Format = cli.Command{
 		case "csv":
 			err = CSV(db, table, out)
 		case "xml":
-			err = Synctech(db, pathAttachments, out)
+			err = XML(db, pathAttachments, out)
 		default:
 			return errors.Errorf("format '%s' not recognised", format)
 		}
@@ -180,6 +180,111 @@ func CSV(db *sql.DB, table string, out io.Writer) error {
 	return nil
 }
 
+// XML puts the messages into a format viewable with a browser.
+func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
+	recipients := map[int64]types.DbRecipient{}
+	msgs := &types.Messages{}
+	msgAttachments := map[int64][]*types.DbAttachment{} //key: message id
+
+	rows, err := SelectStructFromTable(db, types.DbRecipient{}, "recipient")
+	if err != nil {
+		return errors.Wrap(err, "xml select recipient")
+	}
+	for _, row := range rows {
+		r := row.(*types.DbRecipient)
+		recipients[r.ID] = *r
+	}
+
+	rows, err = SelectStructFromTable(db, types.DbMessage{}, "message")
+	if err != nil {
+		return errors.Wrap(err, "xml select message")
+	}
+	for _, row := range rows {
+		msg := row.(*types.DbMessage)
+		rcp := recipients[msg.FromRecipientId]
+		xml := types.NewMessage(*msg, rcp)
+		msgs.Messages = append(msgs.Messages, xml)
+// break
+	}
+
+	rows, err = SelectStructFromTable(db, types.DbAttachment{}, "attachment")
+	if err != nil {
+		return errors.Wrap(err, "xml select attachment")
+	}
+	for _, row := range rows {
+		r := row.(*types.DbAttachment)
+		mid := r.MessageId
+		// mid, xml := types.NewAttachment(*r)
+		msgAttachments[mid] = append(msgAttachments[mid], r)
+	}
+
+	for i, msg := range msgs.Messages {
+		var messageSize uint64
+		id := msg.MessageId
+		attachments, ok := msgAttachments[id]
+		if ok {
+			for _, attachment := range attachments {
+				xml := types.NewAttachment(*attachment)
+
+				prefix := fmt.Sprintf("%06d", attachment.ID)
+				if path, err := findAttachment(pathAttachments, prefix); err != nil {
+					if err == os.ErrNotExist {
+						log.Printf("No attachment file found at '%v' with id = %v", pathAttachments, prefix)
+					} else {
+						return errors.Wrap(err, "find attachment")
+					}
+				} else if info, err := os.Stat(path); err != nil {
+					return errors.Wrap(err, "attachment size")
+				} else {
+					size := uint64(info.Size())
+					if size != attachment.DataSize {
+						log.Printf("attachment (id %v) file size (%v) mismatches declared size (%v)", prefix, size, attachment.DataSize)
+					}
+					messageSize += size
+					xml.Src = path
+				}
+				msg.AttachmentList.Attachments = append(msg.AttachmentList.Attachments, xml)
+			}
+		}
+		// if len(attachments) == 0 {
+			// continue
+		// }
+		// msg.AttachmentList.Attachments = attachments
+
+		sizeString := strconv.FormatUint(messageSize, 10)
+		if msg.MSize != "null" && msg.MSize != sizeString {
+			log.Printf("MessageID %v declared size %v != calculated size %v\n", id, msg.MSize, sizeString)
+		}
+		msg.MSize = sizeString
+
+		// if msg.MType == nil {
+			// if synctech.SetMMSMessageType(synctech.MMSSendReq, &msg) != nil {
+				// panic("logic error: this should never happen")
+			// }
+			// smses.MMS = append(smses.MMS, msg)
+			// if synctech.SetMMSMessageType(synctech.MMSRetrieveConf, &msg) != nil {
+				// panic("logic error: this should never happen")
+			// }
+		// }
+		// msgs.Messages = append(msgs.Messages, msg)
+		msgs.Messages[i] = msg
+	}
+	// log.Printf("MSG = %+v", msgs)
+
+	msgs.Count = len(msgs.Messages)
+	x, err := xml.MarshalIndent(msgs, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "unable to format XML")
+	}
+
+	w := types.NewMultiWriter(out)
+	w.W([]byte("<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>\n"))
+	w.W([]byte("<?xml-stylesheet type=\"text/xsl\" href=\"messages.xsl\" ?>\n"))
+	w.W(x)
+	return errors.WithMessage(w.Error(), "failed to write out XML")
+}
+			// err = Synctech(db, pathAttachments, out)
+
 // Synctech() formats the backup into an XML format compatible with
 // SMS Backup & Restore by SyncTech. Layout described at their website
 // https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
@@ -236,12 +341,15 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 		parts, ok := mmsParts[id]
 		if ok {
 			for i, part := range parts {
-				if size, data, err := ReadAttachment(pathAttachments, part.UniqueId); err != nil {
+				prefix := fmt.Sprintf("%v", part.UniqueId)
+				if path, err := findAttachment(pathAttachments, prefix); err != nil {
 					if err == os.ErrNotExist {
 						log.Printf("No attachment file found with id = %v", id)
 					} else {
-						return errors.Wrap(err, "read attachment")
+						return errors.Wrap(err, "find attachment")
 					}
+				} else if size, data, err := readFileAsBase64(path); err != nil {
+					return errors.Wrap(err, "read attachment")
 				} else {
 					if size != part.DataSize {
 						log.Printf("attachment (id %v) file size (%v) mismatches declared size (%v)", part.UniqueId, size, part.DataSize)
@@ -294,14 +402,14 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 	return errors.WithMessage(w.Error(), "failed to write out XML")
 }
 
-func ReadAttachment(folder string, id uint64) (uint64, string, error) {
-	pattern := filepath.Join(folder, fmt.Sprintf("%v*", id))
+func findAttachment(folder string, prefix string) (string, error) {
+	pattern := filepath.Join(folder, prefix + "*")
 	if matches, err := filepath.Glob(pattern); err != nil {
-		return 0, "", errors.Wrap(err, "find attachment file")
+		return "", err
 	} else if len(matches) == 0 {
-		return 0, "", os.ErrNotExist
+		return "", os.ErrNotExist
 	} else {
-		return readFileAsBase64(matches[0])
+		return matches[0], nil
 	}
 }
 

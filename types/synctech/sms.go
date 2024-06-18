@@ -205,7 +205,7 @@ type MMS struct {
 	ContactName  *string `xml:"contact_name,attr"`  // optional
 }
 
-// SMS fields as stored in signal database (relevant subset)
+// MMS fields as stored in signal database (relevant subset)
 type DbMMS struct {
 	ID           int64
 	Address      int64

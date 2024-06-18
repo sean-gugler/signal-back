@@ -204,7 +204,6 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 		rcp := recipients[msg.FromRecipientId]
 		xml := types.NewMessage(*msg, rcp)
 		msgs.Messages = append(msgs.Messages, xml)
-// break
 	}
 
 	rows, err = SelectStructFromTable(db, types.DbAttachment{}, "attachment")
@@ -214,7 +213,6 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	for _, row := range rows {
 		r := row.(*types.DbAttachment)
 		mid := r.MessageId
-		// mid, xml := types.NewAttachment(*r)
 		msgAttachments[mid] = append(msgAttachments[mid], r)
 	}
 
@@ -246,10 +244,6 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 				msg.AttachmentList.Attachments = append(msg.AttachmentList.Attachments, xml)
 			}
 		}
-		// if len(attachments) == 0 {
-			// continue
-		// }
-		// msg.AttachmentList.Attachments = attachments
 
 		sizeString := strconv.FormatUint(messageSize, 10)
 		if msg.MSize != "null" && msg.MSize != sizeString {
@@ -257,19 +251,8 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 		}
 		msg.MSize = sizeString
 
-		// if msg.MType == nil {
-			// if synctech.SetMMSMessageType(synctech.MMSSendReq, &msg) != nil {
-				// panic("logic error: this should never happen")
-			// }
-			// smses.MMS = append(smses.MMS, msg)
-			// if synctech.SetMMSMessageType(synctech.MMSRetrieveConf, &msg) != nil {
-				// panic("logic error: this should never happen")
-			// }
-		// }
-		// msgs.Messages = append(msgs.Messages, msg)
 		msgs.Messages[i] = msg
 	}
-	// log.Printf("MSG = %+v", msgs)
 
 	msgs.Count = len(msgs.Messages)
 	x, err := xml.MarshalIndent(msgs, "", "  ")
@@ -283,7 +266,6 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	w.W(x)
 	return errors.WithMessage(w.Error(), "failed to write out XML")
 }
-			// err = Synctech(db, pathAttachments, out)
 
 // Synctech() formats the backup into an XML format compatible with
 // SMS Backup & Restore by SyncTech. Layout described at their website

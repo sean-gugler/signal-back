@@ -49,13 +49,16 @@
 	<h1>Messages</h1>
 	<table>
 		<tr>
+			<th>Group</th>
+			<th>Date</th>
 			<th>Type</th>
 			<th>Contact</th>
-			<th>Date</th>
 			<th>Message</th>
 		</tr>
 		<xsl:for-each select="messages/*">
 		<tr>
+			<td><xsl:value-of select="@group_name"/></td>
+			<td class="date"><xsl:value-of select="@readable_date"/></td>
 			<td>
 				<xsl:if test="@type = 1">
 				From
@@ -68,7 +71,6 @@
 				</xsl:if>
 			</td>
 			<td><xsl:value-of select="@contact_name"/></td>
-			<td class="date"><xsl:value-of select="@readable_date"/></td>
 			<td class="body">
 				<xsl:value-of select="@body"/>
 				<xsl:for-each select="attachments/attachment">

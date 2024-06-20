@@ -44,6 +44,11 @@ type DbGroup struct {
 	Title       sql.NullString
 }
 
+type DbThread struct {
+	ID          int64
+	RecipientId int64
+}
+
 // Messages holds a set of Message records.
 type Messages struct {
 	XMLName  xml.Name  `xml:"messages"`
@@ -73,6 +78,7 @@ type Message struct {
 	MSize        string  `xml:"m_size,attr"`        // required (MessageSize)
 	ReadableDate   *string  `xml:"readable_date,attr"`  // optional
 	ContactName           *string   `xml:"contact_name,attr"`           // required
+	GroupName           *string   `xml:"group_name,attr"`           // required
 }
 
 // https://github.com/signalapp/Signal-Android/blob/main/app/src/main/java/org/thoughtcrime/securesms/database/MessageTable.kt
@@ -81,6 +87,7 @@ type Message struct {
 // Fusion of older SMS and MMS tables
 type DbMessage struct {
 	ID              int64
+	ThreadId        int64
 	FromRecipientId int64
 	ToRecipientId   int64  //SMS+MMS Address
 	DateReceived    uint64 //SMS Date, MMS DateReceived
@@ -119,31 +126,36 @@ func NewMessage(msg DbMessage) Message {
 	return xml
 }
 
-func SetMessageContact(msg *DbMessage, xml *Message, correspondents map[int64]DbCorrespondent, groups map[int64]DbGroup) {
+func SetMessageContact(msg *DbMessage, xml *Message, correspondents map[int64]DbCorrespondent, threads map[int64]DbThread, groups map[int64]DbGroup) {
+	if thread, ok := threads[msg.ThreadId]; ok {
+		tid := thread.RecipientId
+		
+		if group, ok := groups[tid]; ok {
+			name := StringPtr(group.Title)
+			if name == nil {
+				generic := fmt.Sprintf("Group%d", tid)
+				name = &generic
+			}
+			xml.GroupName = name
+			xml.Type = SMSReceived
+		}
+	}
+
 	id := msg.ToRecipientId
 	if xml.Type == SMSReceived {
 		id = msg.FromRecipientId
 	}
 
-	var name *string
-
-	if group, ok := groups[id]; ok {
-		name = StringPtr(group.Title)
-		if name == nil {
-			generic := fmt.Sprintf("Group%d", id)
-			name = &generic
-		}
-	} else if correspondent, ok := correspondents[id]; ok {
-		name = StringPtr(correspondent.SystemJoinedName)
+	if correspondent, ok := correspondents[id]; ok {
+		name := StringPtr(correspondent.SystemJoinedName)
 		if name == nil {
 			name = StringPtr(correspondent.ProfileJoinedName)
 		}
 		if name == nil {
 			name = StringPtr(correspondent.E164)
 		}
+		xml.ContactName = name
 	}
-	
-	xml.ContactName = name
 }
 
 // Attachment holds a single attachment for a Message.

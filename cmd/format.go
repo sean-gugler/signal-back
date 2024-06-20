@@ -182,10 +182,13 @@ func CSV(db *sql.DB, table string, out io.Writer) error {
 
 // XML puts the messages into a format viewable with a browser.
 func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
-	correspondents := map[int64]message.DbCorrespondent{}
-	groups := map[int64]message.DbGroup{}
-	msgs := &message.Messages{}
-	msgAttachments := map[int64][]*message.DbAttachment{} //key: message id
+	var (
+		correspondents = make(map[int64]message.DbCorrespondent)
+		threads        = make(map[int64]message.DbThread)
+		groups         = make(map[int64]message.DbGroup)
+		msgAttachments = make(map[int64][]*message.DbAttachment) //key: message id
+		msgs           = message.Messages{}
+	)
 
 	rows, err := SelectStructFromTable(db, message.DbCorrespondent{}, "recipient")
 	if err != nil {
@@ -194,6 +197,15 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	for _, row := range rows {
 		r := row.(*message.DbCorrespondent)
 		correspondents[r.ID] = *r
+	}
+
+	rows, err = SelectStructFromTable(db, message.DbThread{}, "thread")
+	if err != nil {
+		return errors.Wrap(err, "xml select thread")
+	}
+	for _, row := range rows {
+		r := row.(*message.DbThread)
+		threads[r.ID] = *r
 	}
 
 	rows, err = SelectStructFromTable(db, message.DbGroup{}, "groups")
@@ -212,7 +224,7 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	for _, row := range rows {
 		msg := row.(*message.DbMessage)
 		xml := message.NewMessage(*msg)
-		message.SetMessageContact(msg, &xml, correspondents, groups)
+		message.SetMessageContact(msg, &xml, correspondents, threads, groups)
 		msgs.Messages = append(msgs.Messages, xml)
 	}
 
@@ -229,8 +241,7 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	for i, msg := range msgs.Messages {
 		var messageSize uint64
 		id := msg.MessageId
-		attachments, ok := msgAttachments[id]
-		if ok {
+		if attachments, ok := msgAttachments[id]; ok {
 			for _, attachment := range attachments {
 				xml := message.NewAttachment(*attachment)
 

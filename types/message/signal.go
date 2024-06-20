@@ -42,6 +42,7 @@ type DbGroup struct {
 	GroupId     string
 	RecipientId int64
 	Title       sql.NullString
+	Timestamp   sql.NullInt64
 }
 
 type DbThread struct {
@@ -79,6 +80,7 @@ type Message struct {
 	ReadableDate   *string  `xml:"readable_date,attr"`  // optional
 	ContactName           *string   `xml:"contact_name,attr"`           // required
 	GroupName           *string   `xml:"group_name,attr"`           // required
+	GroupDate       uint64  `xml:"-"`      // optional
 }
 
 // https://github.com/signalapp/Signal-Android/blob/main/app/src/main/java/org/thoughtcrime/securesms/database/MessageTable.kt
@@ -137,6 +139,7 @@ func SetMessageContact(msg *DbMessage, xml *Message, correspondents map[int64]Db
 				name = &generic
 			}
 			xml.GroupName = name
+			xml.GroupDate = IntRef(group.Timestamp)
 			xml.Type = SMSReceived
 		}
 	}

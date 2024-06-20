@@ -285,17 +285,12 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	m := msgs.Messages
 	msgs.Count = len(m)
 	slices.SortStableFunc(m, func(a, b message.Message) int {
-		groupA := ""
-		groupB := ""
-		if a.GroupName != nil {
-			groupA = *a.GroupName
-		}
-		if b.GroupName != nil {
-			groupB = *b.GroupName
-		}
-		c := cmp.Compare(groupA, groupB)
+		c := cmp.Compare(a.GroupDate, b.GroupDate)
 		if c == 0 {
-			c = cmp.Compare(a.DateSent, b.DateSent)
+			c = cmp.Compare(stringPtr(a.GroupName), stringPtr(b.GroupName))
+			if c == 0 {
+				c = cmp.Compare(a.DateSent, b.DateSent)
+			}
 		}
 		return c
 	})
@@ -310,6 +305,14 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	w.W([]byte("<?xml-stylesheet type=\"text/xsl\" href=\"messages.xsl\" ?>\n"))
 	w.W(x)
 	return errors.WithMessage(w.Error(), "failed to write out XML")
+}
+
+func stringPtr(s *string) string {
+	if s == nil {
+		return ""
+	} else {
+		return *s
+	}
 }
 
 // Synctech() formats the backup into an XML format compatible with

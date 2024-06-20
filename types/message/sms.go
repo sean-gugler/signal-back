@@ -138,3 +138,11 @@ func IntPtr(ns sql.NullInt64) *uint64 {
 	}
 	return nil
 }
+
+func IntRef(ns sql.NullInt64) uint64 {
+	if ns.Valid {
+		u := uint64(ns.Int64)
+		return u
+	}
+	return 0
+}

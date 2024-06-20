@@ -199,10 +199,11 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	if err != nil {
 		return errors.Wrap(err, "xml select message")
 	}
-	for _, row := range rows {
+	for i, row := range rows {
 		msg := row.(*message.DbMessage)
-		rcp := correspondents[msg.FromRecipientId]
-		xml := message.NewMessage(*msg, rcp)
+		from := correspondents[msg.FromRecipientId]
+		to := correspondents[msg.ToRecipientId]
+		xml := message.NewMessage(*msg, from, to)
 		msgs.Messages = append(msgs.Messages, xml)
 	}
 

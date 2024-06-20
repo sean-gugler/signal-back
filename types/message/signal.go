@@ -12,7 +12,7 @@ import (
 // and because it also represents "sender".
 type Correspondent struct {
 	XMLName xml.Name `xml:"correspondent"`
-	From    string   `xml:"from,attr"` // required
+	Number    string   `xml:"number,attr"` // required
 }
 
 // Correspondent fields as stored in signal database (relevant subset)
@@ -28,11 +28,11 @@ type DbCorrespondent struct {
 // NewCorrespondent constructs an XML correspondent struct from a SQL record.
 func NewCorrespondent(correspondent DbCorrespondent) (int64, Correspondent) {
 	xml := Correspondent{}
-	from := StringPtr(correspondent.E164)
-	if from == nil {
-		xml.From = "null"
+	number := StringPtr(correspondent.E164)
+	if number == nil {
+		xml.Number = "null"
 	} else {
-		xml.From = *from
+		xml.Number = *number
 	}
 
 	return correspondent.ID, xml
@@ -54,6 +54,7 @@ type Message struct {
 	XMLName      xml.Name `xml:"message"`
 	AttachmentList     AttachmentList
 	From           string   `xml:"from,attr"`           // required
+	To           string   `xml:"to,attr"`           // required
 	DateSent       *uint64  `xml:"date_sent,attr"`      // optional
 	DateReceived           uint64   `xml:"date_received,attr"`           // required
 	Type           SMSType  `xml:"type,attr"`           // required
@@ -67,7 +68,8 @@ type Message struct {
 	MType        *uint64 `xml:"m_type,attr"`        // required (MessageType)
 	MSize        string  `xml:"m_size,attr"`        // required (MessageSize)
 	ReadableDate   *string  `xml:"readable_date,attr"`  // optional
-	ContactName    *string  `xml:"contact_name,attr"`   // optional
+	FromName    *string  `xml:"from_name,attr"`   // optional
+	ToName    *string  `xml:"to_name,attr"`   // optional
 }
 
 // https://github.com/signalapp/Signal-Android/blob/main/app/src/main/java/org/thoughtcrime/securesms/database/MessageTable.kt
@@ -76,7 +78,8 @@ type Message struct {
 // Fusion of older SMS and MMS tables
 type DbMessage struct {
 	ID              int64
-	FromRecipientId int64  //SMS+MMS Address
+	FromRecipientId int64
+	ToRecipientId   int64  //SMS+MMS Address
 	DateReceived    uint64 //SMS Date, MMS DateReceived
 	DateSent        uint64 //SMS DateSent, MMS Date
 	Read            int64
@@ -91,10 +94,11 @@ type DbMessage struct {
 }
 
 // NewMessage constructs an XML Message struct from a SQL record.
-func NewMessage(msg DbMessage, correspondent DbCorrespondent) Message {
+func NewMessage(msg DbMessage, from DbCorrespondent, to DbCorrespondent) Message {
 	xml := Message{
 		MessageId:          msg.ID,
-		From:           StringRef(correspondent.E164),
+		From:           StringRef(from.E164),
+		To:           StringRef(to.E164),
 		Type:           TranslateSMSType(msg.Type),
 		Body:           StringPtr(msg.Body),
 		SubscriptionId: msg.SubscriptionId,
@@ -106,10 +110,14 @@ func NewMessage(msg DbMessage, correspondent DbCorrespondent) Message {
 		MType:         IntPtr(msg.MType),
 		MSize:        "null",
 		ReadableDate: IntToTime(&msg.DateReceived),
-		ContactName:  StringPtr(correspondent.SystemJoinedName),
+		FromName:  StringPtr(from.SystemJoinedName),
+		ToName:  StringPtr(to.SystemJoinedName),
 	}
-	if xml.ContactName == nil {
-		xml.ContactName = StringPtr(correspondent.ProfileJoinedName)
+	if xml.FromName == nil {
+		xml.FromName = StringPtr(from.ProfileJoinedName)
+	}
+	if xml.ToName == nil {
+		xml.ToName = StringPtr(to.ProfileJoinedName)
 	}
 	if msg.MSize.Valid {
 		xml.MSize = strconv.FormatInt(msg.MSize.Int64, 10)

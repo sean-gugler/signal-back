@@ -183,6 +183,7 @@ func CSV(db *sql.DB, table string, out io.Writer) error {
 // XML puts the messages into a format viewable with a browser.
 func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	correspondents := map[int64]message.DbCorrespondent{}
+	groups := map[int64]message.DbGroup{}
 	msgs := &message.Messages{}
 	msgAttachments := map[int64][]*message.DbAttachment{} //key: message id
 
@@ -195,15 +196,23 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 		correspondents[r.ID] = *r
 	}
 
+	rows, err = SelectStructFromTable(db, message.DbGroup{}, "groups")
+	if err != nil {
+		return errors.Wrap(err, "xml select groups")
+	}
+	for _, row := range rows {
+		r := row.(*message.DbGroup)
+		groups[r.RecipientId] = *r
+	}
+
 	rows, err = SelectStructFromTable(db, message.DbMessage{}, "message")
 	if err != nil {
 		return errors.Wrap(err, "xml select message")
 	}
-	for i, row := range rows {
+	for _, row := range rows {
 		msg := row.(*message.DbMessage)
-		from := correspondents[msg.FromRecipientId]
-		to := correspondents[msg.ToRecipientId]
-		xml := message.NewMessage(*msg, from, to)
+		xml := message.NewMessage(*msg)
+		message.SetMessageContact(msg, &xml, correspondents, groups)
 		msgs.Messages = append(msgs.Messages, xml)
 	}
 

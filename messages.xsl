@@ -42,35 +42,29 @@
 		<colgroup>
             <col style="width:80px"/>
             <col style="width:120px"/>
-            <col style="width:160px"/>
             <col style="width:180px"/>
+            <col style="width:680px"/>
         </colgroup>
 		<tr>
 			<th>Type</th>
-			<th>Number</th>
-			<th>Name</th>
+			<th>Contact</th>
 			<th>Date</th>
 			<th>Message</th>
 		</tr>
 		<xsl:for-each select="messages/*">
 		<tr>
-			<xsl:choose>
-				<xsl:when test="@type = 1">
-					<td>Received</td>
-					<td><xsl:value-of select="@from"/></td>
-					<td><xsl:value-of select="@from_name"/></td>
-				</xsl:when>
-				<xsl:when test="@type = 2">
-					<td>Sent</td>
-					<td><xsl:value-of select="@to"/></td>
-					<td><xsl:value-of select="@to_name"/></td>
-				</xsl:when>
-				<xsl:when test="@type = 3">
-					<td>Draft</td>
-					<td><xsl:value-of select="@to"/></td>
-					<td><xsl:value-of select="@to_name"/></td>
-				</xsl:when>
-			</xsl:choose>
+			<td>
+				<xsl:if test="@type = 1">
+				Received
+				</xsl:if>
+				<xsl:if test="@type = 2">
+				Sent
+				</xsl:if>
+				<xsl:if test="@type = 3">
+				Draft
+				</xsl:if>
+			</td>
+			<td><xsl:value-of select="@contact_name"/></td>
 			<td><xsl:value-of select="@readable_date"/></td>
 			<td style="word-wrap: break-word;">
 				<xsl:value-of select="@body"/>

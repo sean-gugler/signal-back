@@ -38,6 +38,12 @@ func NewCorrespondent(correspondent DbCorrespondent) (int64, Correspondent) {
 	return correspondent.ID, xml
 }
 
+type DbGroup struct {
+	GroupId     string
+	RecipientId int64
+	Title       sql.NullString
+}
+
 // Messages holds a set of Message records.
 type Messages struct {
 	XMLName  xml.Name  `xml:"messages"`
@@ -53,8 +59,6 @@ type AttachmentList struct {
 type Message struct {
 	XMLName      xml.Name `xml:"message"`
 	AttachmentList     AttachmentList
-	From           string   `xml:"from,attr"`           // required
-	To           string   `xml:"to,attr"`           // required
 	DateSent       *uint64  `xml:"date_sent,attr"`      // optional
 	DateReceived           uint64   `xml:"date_received,attr"`           // required
 	Type           SMSType  `xml:"type,attr"`           // required
@@ -68,8 +72,7 @@ type Message struct {
 	MType        *uint64 `xml:"m_type,attr"`        // required (MessageType)
 	MSize        string  `xml:"m_size,attr"`        // required (MessageSize)
 	ReadableDate   *string  `xml:"readable_date,attr"`  // optional
-	FromName    *string  `xml:"from_name,attr"`   // optional
-	ToName    *string  `xml:"to_name,attr"`   // optional
+	ContactName           *string   `xml:"contact_name,attr"`           // required
 }
 
 // https://github.com/signalapp/Signal-Android/blob/main/app/src/main/java/org/thoughtcrime/securesms/database/MessageTable.kt
@@ -94,38 +97,53 @@ type DbMessage struct {
 }
 
 // NewMessage constructs an XML Message struct from a SQL record.
-func NewMessage(msg DbMessage, from DbCorrespondent, to DbCorrespondent) Message {
+func NewMessage(msg DbMessage) Message {
 	xml := Message{
 		MessageId:          msg.ID,
-		From:           StringRef(from.E164),
-		To:           StringRef(to.E164),
 		Type:           TranslateSMSType(msg.Type),
 		Body:           StringPtr(msg.Body),
 		SubscriptionId: msg.SubscriptionId,
-		Read:           msg.Read,
 		DateSent:     &msg.DateSent,
 		DateReceived: msg.DateReceived / 1000,
+		Read:           msg.Read,
+		Status:       IntPtr(msg.St),
 		CtL:          StringRef(msg.CtL),
 		TrId:         StringRef(msg.TrId),
 		MType:         IntPtr(msg.MType),
 		MSize:        "null",
 		ReadableDate: IntToTime(&msg.DateReceived),
-		FromName:  StringPtr(from.SystemJoinedName),
-		ToName:  StringPtr(to.SystemJoinedName),
 	}
-	if xml.FromName == nil {
-		xml.FromName = StringPtr(from.ProfileJoinedName)
-	}
-	if xml.ToName == nil {
-		xml.ToName = StringPtr(to.ProfileJoinedName)
-	}
-	if msg.MSize.Valid {
-		xml.MSize = strconv.FormatInt(msg.MSize.Int64, 10)
-	}
-	if v := IntPtr(msg.St); v != nil {
-		xml.Status = v
+	if v := IntPtr(msg.MSize); v != nil {
+		xml.MSize = strconv.FormatUint(*v, 10)
 	}
 	return xml
+}
+
+func SetMessageContact(msg *DbMessage, xml *Message, correspondents map[int64]DbCorrespondent, groups map[int64]DbGroup) {
+	id := msg.ToRecipientId
+	if xml.Type == SMSReceived {
+		id = msg.FromRecipientId
+	}
+
+	var name *string
+
+	if group, ok := groups[id]; ok {
+		name = StringPtr(group.Title)
+		if name == nil {
+			generic := fmt.Sprintf("Group%d", id)
+			name = &generic
+		}
+	} else if correspondent, ok := correspondents[id]; ok {
+		name = StringPtr(correspondent.SystemJoinedName)
+		if name == nil {
+			name = StringPtr(correspondent.ProfileJoinedName)
+		}
+		if name == nil {
+			name = StringPtr(correspondent.E164)
+		}
+	}
+	
+	xml.ContactName = name
 }
 
 // Attachment holds a single attachment for a Message.
@@ -165,20 +183,3 @@ func NewAttachment(attachment DbAttachment) Attachment {
 
 	return xml
 }
-
-// NewAttachmentText constructs an XML Attachment struct from an MMS body.
-func NewAttachmentText(msg Message) Attachment {
-	null := "null"
-	remoteLocation := fmt.Sprintf("txt%06d.txt", msg.MessageId)
-
-	xml := Attachment{
-		ContentType:    "text/plain",
-		RemoteKey:  null,
-		RemoteLocation:  remoteLocation,
-		FileName:  null,
-		Text:  *msg.Body,
-	}
-
-	return xml
-}
-

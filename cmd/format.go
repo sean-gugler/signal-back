@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"cmp"
 	"database/sql"
 	"encoding/base64"
 	"encoding/csv"
@@ -12,7 +13,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -283,16 +284,20 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 
 	m := msgs.Messages
 	msgs.Count = len(m)
-	sort.SliceStable(m, func(i, j int) bool {
-		if m[i].GroupName == m[j].GroupName {
-			return m[i].DateSent < m[j].DateSent
-		} else if m[i].GroupName == nil {
-			return true
-		} else if m[j].GroupName == nil {
-			return false
-		} else {
-			return *m[i].GroupName < *m[j].GroupName
+	slices.SortStableFunc(m, func(a, b message.Message) int {
+		groupA := ""
+		groupB := ""
+		if a.GroupName != nil {
+			groupA = *a.GroupName
 		}
+		if b.GroupName != nil {
+			groupB = *b.GroupName
+		}
+		c := cmp.Compare(groupA, groupB)
+		if c == 0 {
+			c = cmp.Compare(a.DateSent, b.DateSent)
+		}
+		return c
 	})
 
 	x, err := xml.MarshalIndent(msgs, "", "  ")

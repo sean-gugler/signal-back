@@ -34,17 +34,20 @@
 		{
 			background-color:#dee8f1;
 		}
+		.date
+		{
+			min-width: 160px;
+		}
+		.body
+		{
+			white-space: pre-wrap;
+			max-width: 680px;
+		}
 		</style>
 	</head>
 	<body>
 	<h1>Messages</h1>
 	<table>
-		<colgroup>
-            <col style="width:80px"/>
-            <col style="width:120px"/>
-            <col style="width:180px"/>
-            <col style="width:680px"/>
-        </colgroup>
 		<tr>
 			<th>Type</th>
 			<th>Contact</th>
@@ -55,43 +58,26 @@
 		<tr>
 			<td>
 				<xsl:if test="@type = 1">
-				Received
+				From
 				</xsl:if>
 				<xsl:if test="@type = 2">
-				Sent
+				To
 				</xsl:if>
 				<xsl:if test="@type = 3">
 				Draft
 				</xsl:if>
 			</td>
 			<td><xsl:value-of select="@contact_name"/></td>
-			<td><xsl:value-of select="@readable_date"/></td>
-			<td style="word-wrap: break-word;">
+			<td class="date"><xsl:value-of select="@readable_date"/></td>
+			<td class="body">
 				<xsl:value-of select="@body"/>
 				<xsl:for-each select="attachments/attachment">
-					<a>
+- <a>
 						<xsl:attribute name="href">
 							<xsl:value-of select="@src"/>
 						</xsl:attribute>
 						<xsl:value-of select="@src"/>
 					</a>
-				</xsl:for-each>
-				<xsl:for-each select="parts/part">
-					<xsl:choose>
-						<xsl:when test="starts-with(@content_type,'text/')" >
-							<xsl:value-of select="@text"/><br/>
-						</xsl:when>
-						<xsl:when test="starts-with(@content_type,'image/')" >
-							<img height="300">
-								<xsl:attribute name="src">
-									<xsl:value-of select="concat(concat('data:',@content_type), concat(';base64,',@data))"/>
-								</xsl:attribute>
-							</img><br/>
-						</xsl:when>
-						<xsl:otherwise>
-							<i>Preview of <xsl:value-of select="@ct"/> not supported.</i><br/>
-						</xsl:otherwise>
-					</xsl:choose>
 				</xsl:for-each>
 			</td>
 		</tr>

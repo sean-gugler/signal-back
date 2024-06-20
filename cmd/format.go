@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/xeals/signal-back/types"
-	"github.com/xeals/signal-back/types/synctech"
+	"github.com/xeals/signal-back/types/message"
 )
 
 // Format fulfils the `format` subcommand.
@@ -182,36 +182,36 @@ func CSV(db *sql.DB, table string, out io.Writer) error {
 
 // XML puts the messages into a format viewable with a browser.
 func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
-	recipients := map[int64]types.DbRecipient{}
-	msgs := &types.Messages{}
-	msgAttachments := map[int64][]*types.DbAttachment{} //key: message id
+	correspondents := map[int64]message.DbCorrespondent{}
+	msgs := &message.Messages{}
+	msgAttachments := map[int64][]*message.DbAttachment{} //key: message id
 
-	rows, err := SelectStructFromTable(db, types.DbRecipient{}, "recipient")
+	rows, err := SelectStructFromTable(db, message.DbCorrespondent{}, "recipient")
 	if err != nil {
 		return errors.Wrap(err, "xml select recipient")
 	}
 	for _, row := range rows {
-		r := row.(*types.DbRecipient)
-		recipients[r.ID] = *r
+		r := row.(*message.DbCorrespondent)
+		correspondents[r.ID] = *r
 	}
 
-	rows, err = SelectStructFromTable(db, types.DbMessage{}, "message")
+	rows, err = SelectStructFromTable(db, message.DbMessage{}, "message")
 	if err != nil {
 		return errors.Wrap(err, "xml select message")
 	}
 	for _, row := range rows {
-		msg := row.(*types.DbMessage)
-		rcp := recipients[msg.FromRecipientId]
-		xml := types.NewMessage(*msg, rcp)
+		msg := row.(*message.DbMessage)
+		rcp := correspondents[msg.FromRecipientId]
+		xml := message.NewMessage(*msg, rcp)
 		msgs.Messages = append(msgs.Messages, xml)
 	}
 
-	rows, err = SelectStructFromTable(db, types.DbAttachment{}, "attachment")
+	rows, err = SelectStructFromTable(db, message.DbAttachment{}, "attachment")
 	if err != nil {
 		return errors.Wrap(err, "xml select attachment")
 	}
 	for _, row := range rows {
-		r := row.(*types.DbAttachment)
+		r := row.(*message.DbAttachment)
 		mid := r.MessageId
 		msgAttachments[mid] = append(msgAttachments[mid], r)
 	}
@@ -222,7 +222,7 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 		attachments, ok := msgAttachments[id]
 		if ok {
 			for _, attachment := range attachments {
-				xml := types.NewAttachment(*attachment)
+				xml := message.NewAttachment(*attachment)
 
 				prefix := fmt.Sprintf("%06d", attachment.ID)
 				if path, err := findAttachment(pathAttachments, prefix); err != nil {
@@ -276,49 +276,49 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 // SMS Backup & Restore by SyncTech. Layout described at their website
 // https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
 func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
-	recipients := map[int64]synctech.DbRecipient{}
-	smses := &synctech.SMSes{}
-	mmses := []synctech.MMS{}
-	mmsParts := map[int64][]synctech.MMSPart{} //key: message id
+	recipients := map[int64]message.DbRecipient{}
+	smses := &message.SMSes{}
+	mmses := []message.MMS{}
+	mmsParts := map[int64][]message.MMSPart{} //key: message id
 
-	rows, err := SelectStructFromTable(db, synctech.DbRecipient{}, "recipient")
+	rows, err := SelectStructFromTable(db, message.DbRecipient{}, "recipient")
 	if err != nil {
 		return errors.Wrap(err, "xml select recipient")
 	}
 	for _, row := range rows {
-		r := row.(*synctech.DbRecipient)
+		r := row.(*message.DbRecipient)
 		recipients[r.ID] = *r
 	}
 
-	rows, err = SelectStructFromTable(db, synctech.DbSMS{}, "sms")
+	rows, err = SelectStructFromTable(db, message.DbSMS{}, "sms")
 	if err != nil {
 		return errors.Wrap(err, "xml select sms")
 	}
 	for _, row := range rows {
-		sms := row.(*synctech.DbSMS)
+		sms := row.(*message.DbSMS)
 		rcp := recipients[sms.Address]
-		xml := synctech.NewSMS(*sms, rcp)
+		xml := message.NewSMS(*sms, rcp)
 		smses.SMS = append(smses.SMS, xml)
 	}
 
-	rows, err = SelectStructFromTable(db, synctech.DbMMS{}, "mms")
+	rows, err = SelectStructFromTable(db, message.DbMMS{}, "mms")
 	if err != nil {
 		return errors.Wrap(err, "xml select mms")
 	}
 	for _, row := range rows {
-		mms := row.(*synctech.DbMMS)
+		mms := row.(*message.DbMMS)
 		rcp := recipients[mms.Address]
-		xml := synctech.NewMMS(*mms, rcp)
+		xml := message.NewMMS(*mms, rcp)
 		mmses = append(mmses, xml)
 	}
 
-	rows, err = SelectStructFromTable(db, synctech.DbPart{}, "part")
+	rows, err = SelectStructFromTable(db, message.DbPart{}, "part")
 	if err != nil {
 		return errors.Wrap(err, "xml select part")
 	}
 	for _, row := range rows {
-		r := row.(*synctech.DbPart)
-		mid, xml := synctech.NewPart(*r)
+		r := row.(*message.DbPart)
+		mid, xml := message.NewPart(*r)
 		mmsParts[mid] = append(mmsParts[mid], xml)
 	}
 
@@ -347,7 +347,7 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 			}
 		}
 		if mms.Body != nil && len(*mms.Body) > 0 {
-			parts = append(parts, synctech.NewPartText(mms))
+			parts = append(parts, message.NewPartText(mms))
 			messageSize += uint64(len(*mms.Body))
 			if len(parts) == 1 {
 				mms.TextOnly = 1
@@ -365,11 +365,11 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 		mms.MSize = sizeString
 
 		if mms.MType == nil {
-			if synctech.SetMMSMessageType(synctech.MMSSendReq, &mms) != nil {
+			if message.SetMMSMessageType(message.MMSSendReq, &mms) != nil {
 				panic("logic error: this should never happen")
 			}
 			smses.MMS = append(smses.MMS, mms)
-			if synctech.SetMMSMessageType(synctech.MMSRetrieveConf, &mms) != nil {
+			if message.SetMMSMessageType(message.MMSRetrieveConf, &mms) != nil {
 				panic("logic error: this should never happen")
 			}
 		}

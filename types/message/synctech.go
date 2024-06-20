@@ -1,4 +1,4 @@
-package synctech
+package message
 
 import (
 	"database/sql"
@@ -6,54 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"time"
-
-	"github.com/pkg/errors"
-)
-
-// Character sets as specified by IANA.
-const (
-	CharsetASCII = "3"
-	CharsetUTF8  = "106"
-)
-
-// SMSType is an SMS type as defined by the XML backup spec.
-type SMSType int64
-
-// SMS types
-const (
-	SMSInvalid  SMSType = iota // 0
-	SMSReceived                // 1
-	SMSSent                    // 2
-	SMSDraft                   // 3
-	SMSOutbox                  // 4
-	SMSFailed                  // 5
-	SMSQueued                  // 6
-)
-
-// MMS message types as defined by the MMS Encapsulation Protocol.
-// See: http://www.openmobilealliance.org/release/MMS/V1_2-20050429-A/OMA-MMS-ENC-V1_2-20050301-A.pdf
-const (
-	MMSSendReq           uint64 = iota + 128 // 128
-	MMSSendConf                              // 129
-	MMSNotificationInd                       // 130
-	MMSNotifyResponseInd                     // 131
-	MMSRetrieveConf                          // 132
-	MMSAckknowledgeInd                       // 133
-	MMSDeliveryInd                           // 134
-	MMSReadRecInd                            // 135
-	MMSReadOrigInd                           // 136
-	MMSForwardReq                            // 137
-	MMSForwardConf                           // 138
-	MMSMBoxStoreReq                          // 139
-	MMSMBoxStoreConf                         // 140
-	MMSMBoxViewReq                           // 141
-	MMSMBoxViewConf                          // 142
-	MMSMBoxUploadReq                         // 143
-	MMSMBoxUploadConf                        // 144
-	MMSMBoxDeleteReq                         // 145
-	MMSMBoxDeleteConf                        // 146
-	MMSMBoxDescr                             // 147
 )
 
 // XML fields are as specified by the page content and .xsd file at:
@@ -78,7 +30,7 @@ type DbRecipient struct {
 // NewRecipient constructs an XML recipient struct from a SQL record.
 func NewRecipient(recipient DbRecipient) (int64, Recipient) {
 	xml := Recipient{}
-	phone := stringPtr(recipient.Phone)
+	phone := StringPtr(recipient.Phone)
 	if phone == nil {
 		xml.Phone = "null"
 	} else {
@@ -136,24 +88,24 @@ type DbSMS struct {
 // NewSMS constructs an XML SMS struct from a SQL record.
 func NewSMS(sms DbSMS, recipient DbRecipient) SMS {
 	xml := SMS{
-		Address:        stringRef(recipient.Phone),
+		Address:        StringRef(recipient.Phone),
 		Date:           sms.Date,
-		Type:           translateSMSType(sms.Type),
-		Subject:        stringPtr(sms.Subject),
-		Body:           stringRef(sms.Body),
-		ServiceCenter:  stringPtr(sms.ServiceCenter),
+		Type:           TranslateSMSType(sms.Type),
+		Subject:        StringPtr(sms.Subject),
+		Body:           StringRef(sms.Body),
+		ServiceCenter:  StringPtr(sms.ServiceCenter),
 		SubscriptionId: sms.SubscriptionId,
 		Read:           sms.Read,
 		Status:         sms.Status,
 		DateSent:       &sms.DateSent,
-		ReadableDate:   intToTime(&sms.Date),
-		ContactName:    stringPtr(recipient.SystemDisplayName),
+		ReadableDate:   IntToTime(&sms.Date),
+		ContactName:    StringPtr(recipient.SystemDisplayName),
 	}
-	if v := intPtr(sms.Protocol); v != nil {
+	if v := IntPtr(sms.Protocol); v != nil {
 		xml.Protocol = v
 	}
 	if xml.ContactName == nil {
-		xml.ContactName = stringPtr(recipient.SignalProfileName)
+		xml.ContactName = StringPtr(recipient.SignalProfileName)
 	}
 	return xml
 }
@@ -228,10 +180,10 @@ func NewMMS(mms DbMMS, recipient DbRecipient) MMS {
 		Date:         mms.DateReceived,
 		CtCls:        "null",
 		SubCs:        "null",
-		Body:         stringPtr(mms.Body),
+		Body:         StringPtr(mms.Body),
 		Read:         mms.Read,
-		CtL:          stringRef(mms.CtL),
-		TrId:         stringRef(mms.TrId),
+		CtL:          StringRef(mms.CtL),
+		TrId:         StringRef(mms.TrId),
 		St:           "null",
 		MCls:         "personal",
 		DTm:          "null",
@@ -247,19 +199,19 @@ func NewMMS(mms DbMMS, recipient DbRecipient) MMS {
 		RetrTxt:      "null",
 		RespSt:       "null",
 		MSize:        "null",
-		ReadableDate: intToTime(&mms.DateReceived),
-		Address:      stringRef(recipient.Phone),
-		ContactName:  stringPtr(recipient.SystemDisplayName),
+		ReadableDate: IntToTime(&mms.DateReceived),
+		Address:      StringRef(recipient.Phone),
+		ContactName:  StringPtr(recipient.SystemDisplayName),
 		MId:          mms.ID,
 	}
 	if xml.ContactName == nil {
-		xml.ContactName = stringPtr(recipient.SignalProfileName)
+		xml.ContactName = StringPtr(recipient.SignalProfileName)
 	}
 	if mms.MSize.Valid {
 		xml.MSize = strconv.FormatInt(mms.MSize.Int64, 10)
 	}
 	if err := SetMMSMessageType(mms.MType, &xml); err != nil {
-		body := stringPtr(mms.Body)
+		body := StringPtr(mms.Body)
 		if body == nil {
 			s := "null"
 			body = &s
@@ -313,14 +265,14 @@ func NewPart(part DbPart) (int64, MMSPart) {
 		UniqueId: part.UniqueId,
 		Seq:      uint64(part.Seq),
 		Ct:       part.Ct,
-		Name:     stringRef(part.Name),
-		ChSet:    stringRef(part.Chset),
-		Cd:       stringRef(part.Cd),
-		Fn:       stringRef(part.Fn),
-		CID:      stringRef(part.Cid),
-		Cl:       stringRef(part.Cl),
-		CttS:     stringRef(part.CttS),
-		CttT:     stringRef(part.CttT),
+		Name:     StringRef(part.Name),
+		ChSet:    StringRef(part.Chset),
+		Cd:       StringRef(part.Cd),
+		Fn:       StringRef(part.Fn),
+		CID:      StringRef(part.Cid),
+		Cl:       StringRef(part.Cl),
+		CttS:     StringRef(part.CttS),
+		CttT:     StringRef(part.CttT),
 	}
 	if xml.ChSet == "" {
 		xml.ChSet = CharsetUTF8
@@ -352,88 +304,3 @@ func NewPartText(mms MMS) MMSPart {
 	return xml
 }
 
-func SetMMSMessageType(messageType uint64, mms *MMS) error {
-	switch messageType {
-	case MMSSendReq:
-		mms.MsgBox = 2
-		mms.V = 18
-		break
-	case MMSNotificationInd:
-		// We can safely ignore this case.
-		break
-	case MMSRetrieveConf:
-		mms.MsgBox = 1
-		mms.V = 16
-		break
-	default:
-		return errors.Errorf("unsupported message type %v encountered", messageType)
-	}
-
-	mms.MType = &messageType
-	return nil
-}
-
-func translateSMSType(t int64) SMSType {
-	// Just get the lowest 5 bits, because everything else is masking.
-	// https://github.com/signalapp/Signal-Android/blob/main/app/src/main/java/org/thoughtcrime/securesms/database/MessageTypes.java
-	v := uint8(t) & 0x1F
-
-	if 1 <= v && v <= 18 {
-		return SMSInvalid
-	}
-
-	switch v {
-	case 20: // signal inbox
-		return SMSReceived
-	case 21: // signal outbox
-		return SMSOutbox
-	case 22: // signal sending
-		return SMSQueued
-	case 23: // signal sent
-		return SMSSent
-	case 24: // signal failed
-		return SMSFailed
-	case 25: // pending secure SMS fallback
-		return SMSQueued
-	case 26: // pending insecure SMS fallback
-		return SMSQueued
-	case 27: // signal draft
-		return SMSDraft
-
-	default:
-		log.Fatalf("undefined SMS type: %#v\nplease report this issue, as well as (if possible) details about the SMS,\nsuch as whether it was sent, received, drafted, etc.\n", t)
-		log.Fatalf("note that the output XML may not properly import to Signal\n")
-		return SMSInvalid
-	}
-}
-
-func intToTime(n *uint64) *string {
-	if n == nil {
-		return nil
-	}
-	unix := time.Unix(int64(*n)/1000, 0)
-	t := unix.Format("Jan 02, 2006 3:04:05 PM")
-	return &t
-}
-
-func stringPtr(ns sql.NullString) *string {
-	if ns.Valid {
-		return &ns.String
-	}
-	return nil
-}
-
-func stringRef(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return "null"
-}
-
-func intPtr(ns sql.NullInt64) *uint64 {
-	if ns.Valid {
-		u := uint64(ns.Int64)
-		return &u
-	}
-	return nil
-}

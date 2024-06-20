@@ -230,7 +230,7 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 					if err != os.ErrNotExist {
 						return errors.Wrap(err, "find attachment")
 					} else if xml.ContentType == "application/x-signal-view-once" {
-						log.Printf("'View Once' attachment %v missing, as expected", prefix)
+						log.Printf("attachment %v missing, it was marked 'View Once'", prefix)
 					} else if attachment.TransferState > 0 {
 						log.Printf("attachment %v missing, transfer state incomplete (%v)", prefix, attachment.TransferState)
 					} else {

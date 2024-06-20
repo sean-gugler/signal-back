@@ -64,7 +64,7 @@ type AttachmentList struct {
 type Message struct {
 	XMLName      xml.Name `xml:"message"`
 	AttachmentList     AttachmentList
-	DateSent       *uint64  `xml:"date_sent,attr"`      // optional
+	DateSent       uint64  `xml:"date_sent,attr"`      // optional
 	DateReceived           uint64   `xml:"date_received,attr"`           // required
 	Type           SMSType  `xml:"type,attr"`           // required
 	Body           *string   `xml:"body,attr"`           // required
@@ -110,15 +110,15 @@ func NewMessage(msg DbMessage) Message {
 		Type:           TranslateSMSType(msg.Type),
 		Body:           StringPtr(msg.Body),
 		SubscriptionId: msg.SubscriptionId,
-		DateSent:     &msg.DateSent,
-		DateReceived: msg.DateReceived / 1000,
+		DateSent:     msg.DateSent,
+		DateReceived: msg.DateReceived,
 		Read:           msg.Read,
 		Status:       IntPtr(msg.St),
 		CtL:          StringRef(msg.CtL),
 		TrId:         StringRef(msg.TrId),
 		MType:         IntPtr(msg.MType),
 		MSize:        "null",
-		ReadableDate: IntToTime(&msg.DateReceived),
+		ReadableDate: IntToTime(&msg.DateSent),
 	}
 	if v := IntPtr(msg.MSize); v != nil {
 		xml.MSize = strconv.FormatUint(*v, 10)
@@ -132,7 +132,7 @@ func SetMessageContact(msg *DbMessage, xml *Message, correspondents map[int64]Db
 		
 		if group, ok := groups[tid]; ok {
 			name := StringPtr(group.Title)
-			if name == nil {
+			if name == nil || *name == "" {
 				generic := fmt.Sprintf("Group%d", tid)
 				name = &generic
 			}

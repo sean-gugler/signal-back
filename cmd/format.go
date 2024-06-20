@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -280,7 +281,20 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 		msgs.Messages[i] = msg
 	}
 
-	msgs.Count = len(msgs.Messages)
+	m := msgs.Messages
+	msgs.Count = len(m)
+	sort.SliceStable(m, func(i, j int) bool {
+		if m[i].GroupName == m[j].GroupName {
+			return m[i].DateSent < m[j].DateSent
+		} else if m[i].GroupName == nil {
+			return true
+		} else if m[j].GroupName == nil {
+			return false
+		} else {
+			return *m[i].GroupName < *m[j].GroupName
+		}
+	})
+
 	x, err := xml.MarshalIndent(msgs, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "unable to format XML")

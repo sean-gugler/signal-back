@@ -1,0 +1,93 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="smses">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:choice maxOccurs="unbounded">
+          <xs:element maxOccurs="unbounded" name="sms">
+            <xs:complexType>
+              <xs:attribute name="protocol" type="xs:unsignedByte" use="optional" />
+              <xs:attribute name="address" type="xs:string" use="required" />
+              <xs:attribute name="date" type="xs:unsignedLong" use="required" />
+              <xs:attribute name="type" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="subject" type="xs:string" use="optional" />
+              <xs:attribute name="body" type="xs:string" use="required" />
+              <xs:attribute name="toa" type="xs:string" use="optional" />
+              <xs:attribute name="sc_toa" type="xs:string" use="optional" />
+              <xs:attribute name="service_center" type="xs:string" use="optional" />
+              <xs:attribute name="read" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="status" type="xs:byte" use="required" />
+              <xs:attribute name="locked" type="xs:unsignedByte" use="optional" />
+              <xs:attribute name="date_sent" type="xs:unsignedLong" use="optional" />
+              <xs:attribute name="readable_date" type="xs:string" use="optional" />
+              <xs:attribute name="contact_name" type="xs:string" use="optional" />
+            </xs:complexType>
+          </xs:element>
+          <xs:element maxOccurs="unbounded" name="mms">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="parts">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element maxOccurs="unbounded" name="part">
+                        <xs:complexType>
+                          <xs:attribute name="seq" type="xs:byte" use="required" />
+                          <xs:attribute name="ct" type="xs:string" use="required" />
+                          <xs:attribute name="name" type="xs:string" use="required" />
+                          <xs:attribute name="chset" type="xs:string" use="required" />
+                          <xs:attribute name="cd" type="xs:string" use="required" />
+                          <xs:attribute name="fn" type="xs:string" use="required" />
+                          <xs:attribute name="cid" type="xs:string" use="required" />
+                          <xs:attribute name="cl" type="xs:string" use="required" />
+                          <xs:attribute name="ctt_s" type="xs:string" use="required" />
+                          <xs:attribute name="ctt_t" type="xs:string" use="required" />
+                          <xs:attribute name="text" type="xs:string" use="required" />
+                          <xs:attribute name="data" type="xs:string" use="optional" />
+                        </xs:complexType>
+                      </xs:element>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+              </xs:sequence>
+              <xs:attribute name="text_only" type="xs:unsignedByte" use="optional" />
+              <xs:attribute name="sub" type="xs:string" use="optional" />
+              <xs:attribute name="retr_st" type="xs:string" use="required" />
+              <xs:attribute name="date" type="xs:unsignedLong" use="required" />
+              <xs:attribute name="ct_cls" type="xs:string" use="required" />
+              <xs:attribute name="sub_cs" type="xs:string" use="required" />
+              <xs:attribute name="read" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="ct_l" type="xs:string" use="required" />
+              <xs:attribute name="tr_id" type="xs:string" use="required" />
+              <xs:attribute name="st" type="xs:string" use="required" />
+              <xs:attribute name="msg_box" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="address" type="xs:long" use="required" />
+              <xs:attribute name="m_cls" type="xs:string" use="required" />
+              <xs:attribute name="d_tm" type="xs:string" use="required" />
+              <xs:attribute name="read_status" type="xs:string" use="required" />
+              <xs:attribute name="ct_t" type="xs:string" use="required" />
+              <xs:attribute name="retr_txt_cs" type="xs:string" use="required" />
+              <xs:attribute name="d_rpt" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="m_id" type="xs:string" use="required" />
+              <xs:attribute name="date_sent" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="seen" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="m_type" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="v" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="exp" type="xs:string" use="required" />
+              <xs:attribute name="pri" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="rr" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="resp_txt" type="xs:string" use="required" />
+              <xs:attribute name="rpt_a" type="xs:string" use="required" />
+              <xs:attribute name="locked" type="xs:unsignedByte" use="required" />
+              <xs:attribute name="retr_txt" type="xs:string" use="required" />
+              <xs:attribute name="resp_st" type="xs:string" use="required" />
+              <xs:attribute name="m_size" type="xs:string" use="required" />
+              <xs:attribute name="readable_date" type="xs:string" use="optional" />
+              <xs:attribute name="contact_name" type="xs:string" use="optional" />
+            </xs:complexType>
+          </xs:element>
+        </xs:choice>
+      </xs:sequence>
+      <xs:attribute name="count" type="xs:unsignedShort" use="required" />
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<?xml-stylesheet type="text/xsl" href="sms.xsl"?>
+<smses count="2">
+  <sms protocol="0" address="332" date="1285799668193" type="2" subject="null" body="Sample Message Sent from the phone" toa="null" sc_toa="null" service_center="null" read="1" status="-1" locked="0" readable_date="Sep 30, 2010 8:34:28 AM" contact_name="(Unknown)" />
+  <sms protocol="0" address="4433221123" date="1289643415810" type="1" subject="null" body="Sample Message received by the phone" toa="null" sc_toa="null" service_center="null" read="0" status="-1" locked="0" readable_date="Nov 13, 2010 9:16:55 PM" contact_name="(Unknown)" />
+</smses>

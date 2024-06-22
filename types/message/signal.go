@@ -169,7 +169,7 @@ type Attachment struct {
 	RemoteKey     string   `xml:"remote_key,attr"` // required
 	RemoteLocation     string   `xml:"remote_location,attr"` // required
 	FileName     string   `xml:"file_name,attr"` // required
-	Src     string   `xml:"src,attr"`
+	Src     *string   `xml:"src,attr"`
 	Text     string   `xml:"text,attr"`  // required
 	Data     *string  `xml:"data,attr"`  // optional
 }

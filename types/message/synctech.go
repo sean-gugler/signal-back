@@ -227,6 +227,7 @@ type MMSPart struct {
 	XMLName  xml.Name `xml:"part"`
 	DataSize uint64   `xml:"-"`
 	UniqueId uint64   `xml:"-"`
+	PendingPush int64 `xml:"-"`
 	Seq      uint64   `xml:"seq,attr"`   // required
 	Ct       string   `xml:"ct,attr"`    // required (ContentType)
 	Name     string   `xml:"name,attr"`  // required
@@ -239,6 +240,7 @@ type MMSPart struct {
 	CttT     string   `xml:"ctt_t,attr"` // required
 	Text     string   `xml:"text,attr"`  // required
 	Data     *string  `xml:"data,attr"`  // optional
+	Src      *string  `xml:"src,attr"`   // optional
 }
 
 // Part fields as stored in signal database (relevant subset)
@@ -254,6 +256,7 @@ type DbPart struct {
 	Cl       sql.NullString //ContentLocation
 	CttS     sql.NullString //NullInt64
 	CttT     sql.NullString
+	PendingPush int64
 	DataSize uint64
 	UniqueId uint64
 }
@@ -263,6 +266,7 @@ func NewPart(part DbPart) (int64, MMSPart) {
 	xml := MMSPart{
 		DataSize: part.DataSize,
 		UniqueId: part.UniqueId,
+		PendingPush: part.PendingPush,
 		Seq:      uint64(part.Seq),
 		Ct:       part.Ct,
 		Name:     StringRef(part.Name),

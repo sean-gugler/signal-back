@@ -74,12 +74,26 @@
 			<td class="body">
 				<xsl:value-of select="@body"/>
 				<xsl:for-each select="attachments/attachment">
+					<xsl:choose>
+						<xsl:when test="@src">
 - <a>
-						<xsl:attribute name="href">
-							<xsl:value-of select="@src"/>
-						</xsl:attribute>
-						<xsl:value-of select="@src"/>
-					</a>
+								<xsl:attribute name="href">
+									<xsl:value-of select="@src"/>
+								</xsl:attribute>
+								<xsl:value-of select="@src"/>
+							</a>
+						</xsl:when>
+						<xsl:when test="starts-with(@content_type,'image/')" >
+							<img height="300">
+							  <xsl:attribute name="src">
+								<xsl:value-of select="concat(concat('data:',@content_type), concat(';base64,',@data))"/>
+							  </xsl:attribute>
+							</img><br/>
+						</xsl:when>
+						<xsl:otherwise>
+							<i>Preview of <xsl:value-of select="@content_type"/> not supported.</i><br/>
+						</xsl:otherwise>
+					</xsl:choose>
 				</xsl:for-each>
 			</td>
 		</tr>

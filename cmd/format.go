@@ -23,6 +23,11 @@ import (
 	"github.com/xeals/signal-back/types/message"
 )
 
+type options struct {
+	EmbedAttachments bool
+	MessageLimit     int
+}
+
 // Format fulfils the `format` subcommand.
 var Format = cli.Command{
 	Name:               "format",
@@ -50,11 +55,27 @@ var Format = cli.Command{
 			       "or 'message' if no output file specified.",
 		},
 		&cli.BoolFlag{
+			Name:  "embed_attachments",
+			Usage: "For xml, embeds the entire attachment file in base64 encoding.\n\t\t" +
+			       "Default is to only include the file path of the attachment.",
+		},
+		&cli.BoolFlag{
 			Name:  "verbose, v",
 			Usage: "Enable verbose logging output",
 		},
+		// DEBUG FEATURES
+		&cli.IntFlag{
+			Name:  "message_limit",
+			Hidden: true,
+			Value:  -1,
+		},
 	},
 	Action: func(c *cli.Context) error {
+		opt := options{
+			EmbedAttachments: c.Bool("embed_attachments"),
+			MessageLimit: c.Int("message_limit"),
+		}
+
 		if c.Bool("verbose") {
 			log.SetOutput(os.Stderr)
 		} else {
@@ -124,9 +145,9 @@ var Format = cli.Command{
 			old, err := HasTable(db, "mms")
 			if err == nil {
 				if old {
-					err = Synctech(db, pathAttachments, out)
+					err = Synctech(db, pathAttachments, out, opt)
 				} else {
-					err = XML(db, pathAttachments, out)
+					err = XML(db, pathAttachments, out, opt)
 				}
 			}
 		default:
@@ -195,7 +216,7 @@ func CSV(db *sql.DB, table string, out io.Writer) error {
 }
 
 // XML puts the messages into a format viewable with a browser.
-func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
+func XML(db *sql.DB, pathAttachments string, out io.Writer, opt options) error {
 	var (
 		correspondents = make(map[int64]message.DbCorrespondent)
 		threads        = make(map[int64]message.DbThread)
@@ -235,7 +256,10 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 	if err != nil {
 		return errors.Wrap(err, "xml select message")
 	}
-	for _, row := range rows {
+	for i, row := range rows {
+		if i == opt.MessageLimit {
+			break
+		}
 		msg := row.(*message.DbMessage)
 		xml := message.NewMessage(*msg)
 		message.SetMessageContact(msg, &xml, correspondents, threads, groups)
@@ -259,27 +283,30 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer) error {
 			for _, attachment := range attachments {
 				xml := message.NewAttachment(*attachment)
 
-				prefix := fmt.Sprintf("%06d", attachment.ID)
-				if path, err := findAttachment(pathAttachments, prefix); err != nil {
-					if err != os.ErrNotExist {
-						return errors.Wrap(err, "find attachment")
-					} else if xml.ContentType == "application/x-signal-view-once" {
-						log.Printf("attachment %v missing, it was marked 'View Once'", prefix)
+				stem := fmt.Sprintf("%06d", attachment.ID)
+				prefix := filepath.Join(pathAttachments, stem)
+				size, result, err := getAttachmentData(prefix, opt.EmbedAttachments)
+				if err != nil {
+					return err
+				}
+
+				if size == 0 {
+					msg := fmt.Sprintf("missing file '%v/%v'", pathAttachments, prefix)
+					if xml.ContentType == "application/x-signal-view-once" {
+						msg += ", it was marked 'View Once'"
 					} else if attachment.TransferState > 0 {
-						log.Printf("attachment %v missing, transfer state incomplete (%v)", prefix, attachment.TransferState)
-					} else {
-						log.Printf("attachment file unexpectedly not found under '%v' folder with id = %v", pathAttachments, prefix)
+						msg += fmt.Sprintf(", transfer state incomplete (%v)", attachment.TransferState)
 					}
-					xml.Src = filepath.Join(pathAttachments, prefix)
-				} else if info, err := os.Stat(path); err != nil {
-					return errors.Wrap(err, "attachment size")
+					log.Print(msg)
+				} else if size != attachment.DataSize {
+					log.Printf("attachment (id %v) file size (%v) mismatches declared size (%v)", prefix, size, attachment.DataSize)
+				}
+				messageSize += size
+
+				if opt.EmbedAttachments {
+					xml.Data = result
 				} else {
-					size := uint64(info.Size())
-					if size != attachment.DataSize {
-						log.Printf("attachment (id %v) file size (%v) mismatches declared size (%v)", prefix, size, attachment.DataSize)
-					}
-					messageSize += size
-					xml.Src = path
+					xml.Src = result
 				}
 				msg.AttachmentList.Attachments = append(msg.AttachmentList.Attachments, xml)
 			}
@@ -330,7 +357,7 @@ func stringPtr(s *string) string {
 // Synctech() formats the backup into an XML format compatible with
 // SMS Backup & Restore by SyncTech. Layout described at their website
 // https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/
-func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
+func Synctech(db *sql.DB, pathAttachments string, out io.Writer, opt options) error {
 	recipients := map[int64]message.DbRecipient{}
 	smses := &message.SMSes{}
 	mmses := []message.MMS{}
@@ -349,7 +376,10 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 	if err != nil {
 		return errors.Wrap(err, "xml select sms")
 	}
-	for _, row := range rows {
+	for i, row := range rows {
+		if i == opt.MessageLimit {
+			break
+		}
 		sms := row.(*message.DbSMS)
 		rcp := recipients[sms.Address]
 		xml := message.NewSMS(*sms, rcp)
@@ -360,7 +390,10 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 	if err != nil {
 		return errors.Wrap(err, "xml select mms")
 	}
-	for _, row := range rows {
+	for i, row := range rows {
+		if i == opt.MessageLimit {
+			break
+		}
 		mms := row.(*message.DbMMS)
 		rcp := recipients[mms.Address]
 		xml := message.NewMMS(*mms, rcp)
@@ -383,21 +416,28 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 		parts, ok := mmsParts[id]
 		if ok {
 			for i, part := range parts {
-				prefix := fmt.Sprintf("%v", part.UniqueId)
-				if path, err := findAttachment(pathAttachments, prefix); err != nil {
-					if err == os.ErrNotExist {
-						log.Printf("No attachment file found with id = %v", id)
-					} else {
-						return errors.Wrap(err, "find attachment")
+				stem := fmt.Sprintf("%v", part.UniqueId)
+				prefix := filepath.Join(pathAttachments, stem)
+				size, result, err := getAttachmentData(prefix, opt.EmbedAttachments)
+				if err != nil {
+					return err
+				}
+
+				if size == 0 {
+					msg := fmt.Sprintf("missing file '%v/%v'", pathAttachments, prefix)
+					if part.PendingPush > 0 {
+						msg += fmt.Sprintf(", pending push incomplete (%v)", part.PendingPush)
 					}
-				} else if size, data, err := readFileAsBase64(path); err != nil {
-					return errors.Wrap(err, "read attachment")
+					log.Print(msg)
+				} else if size != part.DataSize {
+					log.Printf("attachment (id %v) file size (%v) mismatches declared size (%v)", prefix, size, part.DataSize)
+				}
+				messageSize += size
+				
+				if opt.EmbedAttachments {
+					parts[i].Data = result
 				} else {
-					if size != part.DataSize {
-						log.Printf("attachment (id %v) file size (%v) mismatches declared size (%v)", part.UniqueId, size, part.DataSize)
-					}
-					messageSize += size
-					parts[i].Data = &data
+					parts[i].Src = result
 				}
 			}
 		}
@@ -444,9 +484,31 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer) error {
 	return errors.WithMessage(w.Error(), "failed to write out XML")
 }
 
-func findAttachment(folder string, prefix string) (string, error) {
-	pattern := filepath.Join(folder, prefix + "*")
-	if matches, err := filepath.Glob(pattern); err != nil {
+func getAttachmentData(prefix string, embed bool) (uint64, *string, error) {
+	if path, err := findAttachment(prefix); err != nil {
+		if err != os.ErrNotExist {
+			return 0, nil, errors.Wrap(err, "find attachment")
+		} else {
+			return 0, &prefix, nil
+		}
+	} else if embed {
+		if size, data, err := readFileAsBase64(path); err != nil {
+			return 0, nil, errors.Wrap(err, "read attachment")
+		} else {
+			return size, &data, nil
+		}
+	} else {
+		if info, err := os.Stat(path); err != nil {
+			return 0, nil, errors.Wrap(err, "attachment size")
+		} else {
+			size := uint64(info.Size())
+			return size, &path, nil
+		}
+	}
+}
+
+func findAttachment(prefix string) (string, error) {
+	if matches, err := filepath.Glob(prefix + "*"); err != nil {
 		return "", err
 	} else if len(matches) == 0 {
 		return "", os.ErrNotExist

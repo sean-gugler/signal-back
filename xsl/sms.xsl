@@ -93,6 +93,14 @@
 			<xsl:otherwise>
 				<xsl:for-each select="parts/part">
 					<xsl:choose>
+					<xsl:when test="@src">
+- <a>
+							<xsl:attribute name="href">
+								<xsl:value-of select="@src"/>
+							</xsl:attribute>
+							<xsl:value-of select="@src"/>
+						</a>
+					</xsl:when>
 					<xsl:when test="@ct = 'application/smil'">
 					</xsl:when>
 					<xsl:when test="@ct = 'text/plain'">

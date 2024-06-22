@@ -4,7 +4,6 @@
                 xmlns:user="http://android.riteshsahu.com">
 <xsl:template match="/">
 
-  <xsl:text disable-output-escaping='yes'>&lt;!DOCTYPE html></xsl:text>
   <html>
 	  <head>
 		  <style type="text/css">

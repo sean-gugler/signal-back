@@ -27,7 +27,9 @@ import (
 const ATTACHMENT_BUFFER_SIZE = 8192
 
 // ProtoCommitHash is the commit hash of the Signal Protobuf spec.
-var ProtoCommitHash = "d6610f0"
+var ProtoCommitHash = "c6473ca"
+
+var ProtoCommitURL = fmt.Sprintf("https://github.com/signalapp/Signal-Android/blob/%s/app/src/main/protowire/Backups.proto", ProtoCommitHash)
 
 // BackupFile stores information about a given backup file.
 //

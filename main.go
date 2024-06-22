@@ -10,11 +10,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var version = "devel"
+var appname = "signal-back"
+var version = "0.2.1"
 
 func main() {
 	cli.VersionPrinter = func(c *cli.Context) {
-		fmt.Printf("signal-back %s\nproto commit: %s\n", version, types.ProtoCommitHash)
+		fmt.Printf("%s %s\nSupports commit %s of Signal Protobuf:\n%s\n", appname, version, types.ProtoCommitHash, types.ProtoCommitURL)
 	}
 
 	app := cli.NewApp()

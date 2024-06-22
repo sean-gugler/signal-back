@@ -1,6 +1,11 @@
 # Notes about this fork
 
-This code is tested and working for Signal backup files made earlier than 2023-07-12. At that time the file format was revised, and this tool does not yet parse the newer format. See signalapp commit [c6473ca](https://github.com/signalapp/Signal-Android/commit/c6473ca9e63236af3eae9959a50cfa643d53272e) for details.
+Motivated because Signal data formats change over time, and the original fork seems to have been abandoned.
+
+This fork has been tested with a Windows 10 build against Signal backup files that were created on these dates:
+* 2022-02-05
+* 2022-12-12
+* 2024-06-08
 
 Binaries for this tool have not yet been updated in github. You'll need to rebuild from source.
 
@@ -44,9 +49,14 @@ Commands:
 ```
 
 Supported export formats are:
-- XML: Compatible with [SMS Backup & Restore](https://play.google.com/store/apps/details?id=com.riteshsahu.SMSBackupRestore)
+- XML: Viewable with a web browser
 - CSV: Comma-Separated Value text file
 - JSON: JavaScript Object Notation file
+
+Use the `--help` option with any of the commands to see more information about that command.
+```sh
+signal-back analyze --help
+```
 
 # Password
 
@@ -62,45 +72,61 @@ Download whichever binary suits your system from the [releases page](https://git
 
 Find where you downloaded the file and open an interactive shell (Command Prompt, Terminal.app, gnome-terminal, etc.). Make sure your `signal-XXX.backup` file is in the same folder, or else specify the full path your backup file when running the program.
 
+If you're on MacOS or Linux (where e.g., `OS` is `darwin` and `ARCH` is `amd64`) you may need to use `chmod` to make it possible to run the downloaded file:
+
+```sh
+chmod +x signal-back_OS_ARCH
+```
+
+In the examples below, the app will be referred to as simply `signal-back`. You should substitute the actual name of the binary you downloaded or built.
+
 ## Extracting
 
 All messages are stored in a sqlite3 database file. Attachment files such as images, videos, and PDFs will be placed in a subfolder named `Attachments`.
 
-If you're on Windows:
-
 ```sh
-signal-back_windows_amd64.exe extract -o folder signal-XXX.backup
-```
-
-If you're on MacOS or Linux (where e.g., `OS` is `darwin` and `ARCH` is `amd64`):
-
-```sh
-chmod +x signal-back_OS_ARCH
-./signal-back_OS_ARCH extract -o folder signal-XXX.backup
+signal-back extract -o folder signal-XXX.backup
 ```
 
 Enter your 30-digit password at the prompt (with or without spaces, doesn't matter). Note that your password will not be echoed back to you for security purposes.
 
-Everything will be in folder you specified, or if you omitted the `-o` option, in the folder where you ran the command. Note that some attachments may have a `.unknown` extension; this is because `signal-back` might not be able to determine what type of files these are. Please report an issue on github if you encounter one of these.
+Everything will be extracted to the folder you specified. If you omitted the `-o` option, they'll be in the folder where you ran the command. Note that some attachments may have a `.unknown` extension; this is because `signal-back` might not be able to determine what type of files these are. Please report an issue on github if you encounter one of these.
 
-## Importing to SMS Backup & Restore
+## Formatting
 
-Once you have extracted the message database, you can convert them into a format usable by SMS Backup & Restore.
+Once you have extracted the database, you can convert its contents into other formats.
 
-If you're on Windows:
-
-```sh
-signal-back_windows_amd64.exe format -f XML -o backup.xml signal.db
-```
-
-If you're on MacOS or Linux (where e.g., `OS` is `darwin` and `ARCH` is `amd64`):
+Change directory to where you extracted the database and attachments, then run the formatter.
 
 ```sh
-chmod +x signal-back_OS_ARCH
-./signal-back_OS_ARCH format -f XML -o backup.xml signal.db
+cd folder
+signal-back format -o messages.xml signal.db
 ```
 
-You can then copy `backup.xml` to your phone and restore it using SMS Backup & Restore.
+### Viewing with a web browser
+
+Find the XSL files in the `xsl` folder of this source repository. Copy them into the same folder as your new XML file.
+
+NOTE: modern browsers will refuse to view the file locally with a `file://` protocol. They need to be served by an actual web server. If you have Python there is a very simple way to start a local server - BE CAREFUL about running this on a computer that is reachable from the Internet; you may be exposing yourself to security risks, for which I cannot be held responsible.
+
+```sh
+cd folder
+python -m http.server 8000
+```
+
+You can then use a web browser on the same computer by visiting the special location 127.0.0.1:8000 and see all the messages in your Signal backup formatted for easy reading.
+
+### Importing to SMS Backup & Restore
+
+If your Signal backup file was created in 2022 or earlier, the XML file can also be imported by [Synctech SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/). Newer backups have a revised format that is incompatible (see signalapp commit [e9d98b7](https://github.com/signalapp/Signal-Android/commit/e9d98b7d39ebf147de1138690cca270604cd793e)), and this tool does not attempt to convert it.
+
+Make sure you use the `--embed-attachments` option if you want to include message attachments. This will take longer and result in a larger XML file.
+
+```sh
+signal-back format --embed-attachments -o backup.xml signal.db
+```
+
+Copy the `backup.xml` file to your phone and restore it using SMS Backup & Restore.
 
 # Building from source
 
@@ -122,6 +148,7 @@ You can also just use `go get github.com/sean-gugler/signal-back`, but I provide
 - [x] Actual command line-ness
 - [x] Formatting ideas and options
 - [ ] User-friendliness in errors and stuff
+- [ ] Faster XML display in web browser
 
 # License
 

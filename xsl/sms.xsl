@@ -34,6 +34,11 @@
 		  {
 			background-color:#dee8f1;
 		  }
+		  .body
+		  {
+			white-space: pre-wrap;
+			max-width: 680px;
+		  }
 		  </style>
 	  </head>
 	  <body>
@@ -88,23 +93,27 @@
 		  <td>
 			<xsl:choose>
 			<xsl:when test="name() = 'sms'">
+			  <div class="body">
 				<xsl:value-of select="@body"/>
+			  </div>
 			</xsl:when>
 			<xsl:otherwise>
 				<xsl:for-each select="parts/part">
 					<xsl:choose>
 					<xsl:when test="@src">
-- <a>
+						<a>
 							<xsl:attribute name="href">
 								<xsl:value-of select="@src"/>
 							</xsl:attribute>
 							<xsl:value-of select="@src"/>
-						</a>
+						</a><br/>
 					</xsl:when>
 					<xsl:when test="@ct = 'application/smil'">
 					</xsl:when>
 					<xsl:when test="@ct = 'text/plain'">
+					  <div class="body">
 						<xsl:value-of select="@text"/><br/>
+					  </div>
 					</xsl:when>
 					<xsl:when test="starts-with(@ct,'image/')" >
 						<img height="300">

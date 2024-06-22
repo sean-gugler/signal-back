@@ -71,17 +71,16 @@
 				</xsl:if>
 			</td>
 			<td><xsl:value-of select="@contact_name"/></td>
-			<td class="body">
-				<xsl:value-of select="@body"/>
+			<td>
 				<xsl:for-each select="attachments/attachment">
 					<xsl:choose>
 						<xsl:when test="@src">
-- <a>
+							<a>
 								<xsl:attribute name="href">
 									<xsl:value-of select="@src"/>
 								</xsl:attribute>
 								<xsl:value-of select="@src"/>
-							</a>
+							</a><br/>
 						</xsl:when>
 						<xsl:when test="starts-with(@content_type,'image/')" >
 							<img height="300">
@@ -95,6 +94,9 @@
 						</xsl:otherwise>
 					</xsl:choose>
 				</xsl:for-each>
+				<div class="body">
+					<xsl:value-of select="@body"/>
+				</div>
 			</td>
 		</tr>
 		</xsl:for-each>

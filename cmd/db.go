@@ -172,9 +172,12 @@ func ScanType(col *sql.ColumnType) interface{} {
 }
 
 // Convert results from SelectEntireTable into strings
-func StringifyRows(vrows [][]interface{}) [][]string {
+func StringifyRows(vrows [][]interface{}, limit int) [][]string {
 	srows := [][]string{}
-	for _, vrow := range vrows {
+	for i, vrow := range vrows {
+		if i == limit {
+			break
+		}
 		ss := make([]string, 0, len(vrow))
 		for _, v := range vrow {
 			s := ""

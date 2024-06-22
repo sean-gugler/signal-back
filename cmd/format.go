@@ -25,7 +25,7 @@ import (
 
 type options struct {
 	EmbedAttachments bool
-	MessageLimit     int
+	Limit            int
 }
 
 // Format fulfils the `format` subcommand.
@@ -65,7 +65,7 @@ var Format = cli.Command{
 		},
 		// DEBUG FEATURES
 		&cli.IntFlag{
-			Name:  "message_limit",
+			Name:  "limit",
 			Hidden: true,
 			Value:  -1,
 		},
@@ -73,7 +73,7 @@ var Format = cli.Command{
 	Action: func(c *cli.Context) error {
 		opt := options{
 			EmbedAttachments: c.Bool("embed_attachments"),
-			MessageLimit: c.Int("message_limit"),
+			Limit: c.Int("limit"),
 		}
 
 		if c.Bool("verbose") {
@@ -138,9 +138,9 @@ var Format = cli.Command{
 
 		switch strings.ToLower(format) {
 		case "json":
-			err = JSON(db, table, out)
+			err = JSON(db, table, out, opt)
 		case "csv":
-			err = CSV(db, table, out)
+			err = CSV(db, table, out, opt)
 		case "xml":
 			old, err := HasTable(db, "mms")
 			if err == nil {
@@ -162,7 +162,7 @@ var Format = cli.Command{
 }
 
 // JSON dumps an entire table into a JSON format.
-func JSON(db *sql.DB, table string, out io.Writer) error {
+func JSON(db *sql.DB, table string, out io.Writer, opt options) error {
 	headers, rows, err := SelectEntireTable(db, table)
 	if err != nil {
 		return errors.Wrap(err, "selecting table")
@@ -171,7 +171,10 @@ func JSON(db *sql.DB, table string, out io.Writer) error {
 	n := len(headers)
 	records := make([]map[string]interface{}, 0, len(rows))
 
-	for _, row := range rows {
+	for i, row := range rows {
+		if i == opt.Limit {
+			break
+		}
 		values := make(map[string]interface{}, n)
 		for i, name := range headers {
 			values[name] = row[i]
@@ -190,7 +193,7 @@ func JSON(db *sql.DB, table string, out io.Writer) error {
 }
 
 // CSV dumps an entire table into a comma-separated value format.
-func CSV(db *sql.DB, table string, out io.Writer) error {
+func CSV(db *sql.DB, table string, out io.Writer, opt options) error {
 	headers, rowsI, err := SelectEntireTable(db, table)
 	if err != nil {
 		return errors.Wrap(err, "selecting table")
@@ -201,7 +204,7 @@ func CSV(db *sql.DB, table string, out io.Writer) error {
 		return errors.Wrap(err, "unable to write CSV headers")
 	}
 
-	rows := StringifyRows(rowsI)
+	rows := StringifyRows(rowsI, opt.Limit)
 	if err := w.WriteAll(rows); err != nil {
 		return errors.Wrap(err, "unable to format CSV")
 	}
@@ -257,7 +260,7 @@ func XML(db *sql.DB, pathAttachments string, out io.Writer, opt options) error {
 		return errors.Wrap(err, "xml select message")
 	}
 	for i, row := range rows {
-		if i == opt.MessageLimit {
+		if i == opt.Limit {
 			break
 		}
 		msg := row.(*message.DbMessage)
@@ -377,7 +380,7 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer, opt options) er
 		return errors.Wrap(err, "xml select sms")
 	}
 	for i, row := range rows {
-		if i == opt.MessageLimit {
+		if i == opt.Limit {
 			break
 		}
 		sms := row.(*message.DbSMS)
@@ -391,7 +394,7 @@ func Synctech(db *sql.DB, pathAttachments string, out io.Writer, opt options) er
 		return errors.Wrap(err, "xml select mms")
 	}
 	for i, row := range rows {
-		if i == opt.MessageLimit {
+		if i == opt.Limit {
 			break
 		}
 		mms := row.(*message.DbMMS)

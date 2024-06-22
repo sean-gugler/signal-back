@@ -52,6 +52,18 @@ func cachedFieldNames(typ reflect.Type) string {
 	return fields
 }
 
+func HasTable(db *sql.DB, table string) (bool, error) {
+	q := fmt.Sprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'", table)
+
+	rows, err := db.Query(q)
+	if err != nil {
+		return false, errors.Wrap(err, q)
+	}
+	defer rows.Close()
+	
+	return rows.Next(), nil
+}
+
 //TODO: upgrade project to support generics [T any]
 
 // Read all rows from table, but only columns that are named as struct members.

@@ -116,7 +116,14 @@ var Format = cli.Command{
 		case "csv":
 			err = CSV(db, table, out)
 		case "xml":
-			err = XML(db, pathAttachments, out)
+			old, err := HasTable(db, "mms")
+			if err == nil {
+				if old {
+					err = Synctech(db, pathAttachments, out)
+				} else {
+					err = XML(db, pathAttachments, out)
+				}
+			}
 		default:
 			return errors.Errorf("format '%s' not recognised", format)
 		}

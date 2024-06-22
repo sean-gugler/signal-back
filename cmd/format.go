@@ -27,8 +27,11 @@ import (
 var Format = cli.Command{
 	Name:               "format",
 	Usage:              "Export messages from a signal database",
-	UsageText:          "Parse and transform messages in the database into other formats.\nXML format is compatible with SMS Backup & Restore by SyncTech",
+	Description:        "Parse and transform messages in the database into other formats.\n"+
+	                    "For backups created by Signal in 2022 or earlier, XML format is\n"+
+	                    "compatible with SMS Backup & Restore by SyncTech",
 	CustomHelpTemplate: SubcommandHelp,
+	ArgsUsage:          "DBFILE",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "output, o",
@@ -36,13 +39,15 @@ var Format = cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "format, f",
-			Usage: "Output messages as `FORMAT` (xml, csv, json). " +
-			       "Default matches --output file extension, or xml if no output file specified.",
+			Usage: "Output messages as `FORMAT` (xml, csv, json).\n\t\t" +
+			       "Default matches --output file extension,\n\t\t" +
+			       "or 'xml' if no output file specified.",
 		},
 		&cli.StringFlag{
 			Name:  "table, t",
-			Usage: "For csv|json, choose which table to format (e.g. message, sms). " +
-			       "Default matches --output file basename, or 'message' if no output file specified.",
+			Usage: "For csv|json, choose which `TABLE` to format (e.g. message, sms).\n\t\t" +
+			       "Default matches --output file basename,\n\t\t" +
+			       "or 'message' if no output file specified.",
 		},
 		&cli.BoolFlag{
 			Name:  "verbose, v",

@@ -19,12 +19,15 @@ func main() {
 
 	app := cli.NewApp()
 	app.CustomAppHelpTemplate = cmd.AppHelp
+	app.Usage = "extract and format the contents of Signal backup files"
+	app.Name = appname
 	app.Version = version
 	app.Commands = []cli.Command{
 		cmd.Analyse,
 		cmd.Extract,
 		cmd.Format,
 	}
+	app.ArgsUsage = "BACKUPFILE"
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "help, h",

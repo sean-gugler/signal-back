@@ -30,8 +30,9 @@ var stickerInfoFilename = "pack_info.json"
 var Extract = cli.Command{
 	Name:               "extract",
 	Usage:              "Decrypt contents into individual files",
-	UsageText:          "Decrypt the backup and extract all files inside it.",
+	Description:        "Decrypt the backup and extract all files inside it.",
 	CustomHelpTemplate: SubcommandHelp,
+	ArgsUsage:          "BACKUPFILE",
 	Flags: append([]cli.Flag{
 		&cli.StringFlag{
 			Name:  "outdir, o",

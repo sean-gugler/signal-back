@@ -14,23 +14,26 @@ import (
 )
 
 // AppHelp is the help template.
-const AppHelp = `Usage: {{.HelpName}} COMMAND [OPTION...] BACKUPFILE
+const AppHelp = `About:
+  {{.Name}}{{if .Usage}}: {{.Usage}}{{end}}{{if .Version}}{{if not .HideVersion}}
+  Version {{.Version}}{{end}}{{end}}
 
-  {{range .Flags}}{{.}}
-  {{end}}{{if .Commands}}
+Usage: {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} COMMAND [OPTION...] {{.ArgsUsage}}{{end}}
+
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{if .VisibleCommands}}
 Commands:
-{{range .Commands}}  {{index .Names 0}}{{ "\t"}}{{.Usage}}
+{{range .VisibleCommands}}  {{index .Names 0}}{{ "\t"}}{{.Usage}}
 {{end}}{{end}}
 `
 
 // TODO: Work out how to display global flags here
 // SubcommandHelp is the subcommand help template.
-const SubcommandHelp = `Usage: {{.HelpName}} [OPTION...] BACKUPFILE
+const SubcommandHelp = `Usage: {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} [OPTION...] {{.ArgsUsage}}{{end}}{{if .Description}}
 
-{{if .UsageText}}{{.UsageText}}
-{{else}}{{.Usage}}
-{{end}}{{if .Flags}}
-  {{range .Flags}}{{.}}
+{{.Description}}{{end}}{{if .VisibleFlags}}
+
+  {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 `
 
@@ -101,12 +104,4 @@ func readPassword(c *cli.Context) (string, error) {
 		pass = string(raw)
 	}
 	return pass, nil
-}
-
-// E is a wrapper to simply create a cli.ExitError.
-func E(err error, msg string, code int) *cli.ExitError {
-	if err == nil {
-		return cli.NewExitError(errors.New(msg), code)
-	}
-	return cli.NewExitError(errors.Wrap(err, msg), code)
 }

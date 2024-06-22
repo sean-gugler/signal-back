@@ -16,10 +16,11 @@ import (
 // Analyse fulfils the `analyse` subcommand.
 var Analyse = cli.Command{
 	Name:               "analyse",
-	Usage:              "Information about the backup file",
-	UsageText:          "Perform integrity check and password validation on the entire file. Optionally display statistical information.",
 	Aliases:            []string{"analyze"},
+	Usage:              "Report information about the backup file",
+	Description:        "Perform integrity check and password validation on the entire file. \nOptionally display statistical information.",
 	CustomHelpTemplate: SubcommandHelp,
+	ArgsUsage:          "BACKUPFILE",
 	Flags: append([]cli.Flag{
 		&cli.BoolFlag{
 			Name:  "summary, s",
